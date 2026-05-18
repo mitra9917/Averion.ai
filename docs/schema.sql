@@ -3,14 +3,14 @@
 
 create extension if not exists pgcrypto;
 
-create table organizations (
+create table if not exists organizations (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
-create table users (
+create table if not exists users (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references organizations(id) on delete cascade,
   email text not null,
@@ -22,7 +22,7 @@ create table users (
   constraint users_org_email_unique unique (organization_id, email)
 );
 
-create table documents (
+create table if not exists documents (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references organizations(id) on delete cascade,
   uploaded_by_user_id uuid references users(id) on delete set null,
@@ -37,7 +37,7 @@ create table documents (
   constraint documents_status_check check (status in ('uploaded', 'processing', 'ready', 'failed'))
 );
 
-create table document_chunks (
+create table if not exists document_chunks (
   id uuid primary key default gen_random_uuid(),
   document_id uuid not null references documents(id) on delete cascade,
   chunk_index integer not null,
@@ -50,7 +50,7 @@ create table document_chunks (
   constraint document_chunks_index_unique unique (document_id, chunk_index)
 );
 
-create table conversations (
+create table if not exists conversations (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references organizations(id) on delete cascade,
   user_id uuid references users(id) on delete set null,
@@ -59,7 +59,7 @@ create table conversations (
   updated_at timestamptz not null default now()
 );
 
-create table messages (
+create table if not exists messages (
   id uuid primary key default gen_random_uuid(),
   conversation_id uuid not null references conversations(id) on delete cascade,
   role text not null,
@@ -70,7 +70,7 @@ create table messages (
   constraint messages_content_not_empty check (length(trim(content)) > 0)
 );
 
-create table feedback (
+create table if not exists feedback (
   id uuid primary key default gen_random_uuid(),
   message_id uuid not null references messages(id) on delete cascade,
   user_id uuid references users(id) on delete set null,
@@ -80,10 +80,10 @@ create table feedback (
   constraint feedback_rating_check check (rating in ('up', 'down'))
 );
 
-create index users_organization_email_idx on users (organization_id, email);
-create index documents_organization_status_idx on documents (organization_id, status);
-create index document_chunks_document_index_idx on document_chunks (document_id, chunk_index);
-create index conversations_organization_user_idx on conversations (organization_id, user_id);
-create index messages_conversation_created_at_idx on messages (conversation_id, created_at);
-create index feedback_message_idx on feedback (message_id);
-create index feedback_user_idx on feedback (user_id);
+create index if not exists users_organization_email_idx on users (organization_id, email);
+create index if not exists documents_organization_status_idx on documents (organization_id, status);
+create index if not exists document_chunks_document_index_idx on document_chunks (document_id, chunk_index);
+create index if not exists conversations_organization_user_idx on conversations (organization_id, user_id);
+create index if not exists messages_conversation_created_at_idx on messages (conversation_id, created_at);
+create index if not exists feedback_message_idx on feedback (message_id);
+create index if not exists feedback_user_idx on feedback (user_id);

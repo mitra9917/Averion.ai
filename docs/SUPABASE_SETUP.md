@@ -139,4 +139,6 @@ If the direct connection does not work, use the Supabase pooler connection strin
 
 If schema creation fails because tables already exist, the schema was probably already applied. Run [supabase_verify.sql](supabase_verify.sql) to confirm.
 
+The schema uses `if not exists`, so accidentally running it again should not delete or reset your data.
+
 If you accidentally paste a secret into a tracked file, do not commit it. Remove it immediately and ask for help before pushing.
