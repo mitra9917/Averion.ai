@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+import re
 
 from app.ai.citation_mapper import build_citations
 from app.ai.llm_service import generate_answer
@@ -11,6 +12,29 @@ from app.db.documents import DatabaseNotConfiguredError
 from app.schemas.chat import ChatCitation, ChatRequest, ChatResponse
 
 router = APIRouter(prefix="/chat", tags=["chat"])
+
+
+def is_greeting(question: str) -> bool:
+    """Check if the question is a basic greeting."""
+    greetings = [
+        r'\b(hi|hello|hey|greetings|good morning|good afternoon|good evening)\b',
+        r'\bhow are you\b',
+        r'\bwhat\'?s up\b',
+        r'\bhowdy\b',
+        r'\byo\b'
+    ]
+    question_lower = question.lower().strip()
+    return any(re.search(pattern, question_lower) for pattern in greetings)
+
+
+def get_greeting_response(question: str) -> str:
+    """Generate a friendly greeting response."""
+    question_lower = question.lower().strip()
+    
+    if re.search(r'\bhow are you\b', question_lower):
+        return "Hello! I'm doing great, thank you for asking! I'm here to help you find information from your uploaded documents. What would you like to know?"
+    
+    return "Hello! Welcome! I'm your AI assistant, ready to help you find information from your uploaded documents. Feel free to ask me any questions about the documents you've uploaded."
 
 
 
@@ -42,6 +66,26 @@ async def chat(
         # Validate question
         if not request.question or not request.question.strip():
             raise HTTPException(status_code=400, detail="Question cannot be empty")
+        
+        # Handle basic greetings without document retrieval
+        if is_greeting(request.question):
+            greeting_answer = get_greeting_response(request.question)
+            
+            stored_messages = store_chat_exchange(
+                organization_id=organization_id,
+                conversation_id=request.conversation_id,
+                question=request.question.strip(),
+                answer=greeting_answer,
+                citations=[]
+            )
+            
+            return ChatResponse(
+                conversation_id=stored_messages.conversation_id,
+                message_id=stored_messages.assistant_message_id,
+                answer=greeting_answer,
+                citations=[],
+                sources=[]
+            )
         
         # Step 1: Retrieve relevant chunks
         chunks = retrieve_chunks(

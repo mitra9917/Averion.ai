@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { CitationSourcePanel } from "@/components/citation-source-panel";
 import { FeedbackControls } from "@/components/feedback-controls";
@@ -19,8 +19,124 @@ export function ChatWorkspace() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isSending, setIsSending] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isListening, setIsListening] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(true);
+  const recognitionRef = useRef<any>(null);
 
   const canSend = useMemo(() => question.trim().length > 0 && !isSending, [question, isSending]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        setSpeechSupported(false);
+        return;
+      }
+
+      const recognition = new SpeechRecognition();
+      recognition.lang = "en-US";
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      recognition.onstart = () => {
+        console.log("Speech recognition started");
+        setIsListening(true);
+      };
+
+      recognition.onresult = (event: any) => {
+        console.log("Speech recognition result:", event);
+        const transcript = event.results[0][0].transcript;
+        console.log("Transcript:", transcript);
+        setQuestion(transcript);
+      };
+
+      recognition.onerror = (event: any) => {
+        setIsListening(false);
+        
+        // Don't show errors for common expected cases
+        if (event.error === "no-speech" || event.error === "aborted") {
+          return;
+        }
+        
+        // Only log to console in development
+        if (process.env.NODE_ENV === "development") {
+          console.log("Speech recognition error:", event.error);
+        }
+        
+        let errorMsg = "Voice input failed";
+        switch (event.error) {
+          case "network":
+            errorMsg = "Network error. Speech recognition requires internet connection.";
+            break;
+          case "not-allowed":
+            errorMsg = "Microphone access denied. Please allow microphone permissions.";
+            break;
+          case "audio-capture":
+            errorMsg = "No microphone found. Please check your device.";
+            break;
+          default:
+            errorMsg = `Voice input error: ${event.error}`;
+        }
+        setErrorMessage(errorMsg);
+      };
+
+      recognition.onend = () => {
+        console.log("Speech recognition ended");
+        setIsListening(false);
+      };
+
+      recognitionRef.current = recognition;
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.abort();
+        } catch (e) {
+          console.error("Error aborting recognition:", e);
+        }
+      }
+    };
+  }, []);
+
+  async function handleMicClick() {
+    if (!recognitionRef.current || isListening) return;
+
+    try {
+      setErrorMessage(null);
+      
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
+      
+      setIsListening(true);
+      recognitionRef.current.start();
+      console.log("Starting speech recognition...");
+    } catch (error: any) {
+      console.error("Failed to start speech recognition:", error);
+      setIsListening(false);
+      
+      if (error.name === "NotAllowedError") {
+        setErrorMessage("Microphone access denied. Please allow microphone permissions in your browser.");
+      } else if (error.name === "NotFoundError") {
+        setErrorMessage("No microphone found. Please check your device.");
+      } else {
+        setErrorMessage("Failed to start voice input. Please try again.");
+      }
+    }
+  }
+
+  function handleStopListening() {
+    if (recognitionRef.current && isListening) {
+      try {
+        recognitionRef.current.stop();
+      } catch (error) {
+        console.error("Error stopping recognition:", error);
+        setIsListening(false);
+      }
+    }
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -154,13 +270,48 @@ export function ChatWorkspace() {
             Ask a question
           </label>
           <div className="flex flex-col gap-3 sm:flex-row">
-            <textarea
-              className="min-h-24 flex-1 resize-none rounded-md border border-slate-300 bg-white px-3 py-2 text-sm leading-6 text-slate-950 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-              id="chat-question"
-              onChange={(event) => setQuestion(event.target.value)}
-              placeholder="Ask a question about your uploaded documents..."
-              value={question}
-            />
+            <div className="relative flex-1">
+              <textarea
+                className="min-h-24 w-full resize-none rounded-md border border-slate-300 bg-white px-3 py-2 pr-12 text-sm leading-6 text-slate-950 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                id="chat-question"
+                onChange={(event) => setQuestion(event.target.value)}
+                placeholder="Ask a question about your uploaded documents..."
+                value={question}
+                disabled={isListening}
+              />
+              {speechSupported && (
+                <button
+                  type="button"
+                  onClick={isListening ? handleStopListening : handleMicClick}
+                  disabled={isSending}
+                  className={`absolute bottom-2 right-2 rounded-md p-2 transition ${
+                    isListening
+                      ? "bg-red-600 text-white hover:bg-red-700"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  } disabled:cursor-not-allowed disabled:opacity-50`}
+                  title={isListening ? "Stop listening" : "Start voice input"}
+                >
+                  {isListening ? (
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <rect x="6" y="6" width="12" height="12" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  ) : (
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                    </svg>
+                  )}
+                </button>
+              )}
+              {isListening && (
+                <div className="absolute left-3 top-2 flex items-center gap-2">
+                  <span className="flex h-2 w-2">
+                    <span className="absolute inline-flex h-2 w-2 animate-ping rounded-full bg-red-400 opacity-75"></span>
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500"></span>
+                  </span>
+                  <span className="text-xs font-medium text-red-600">Listening...</span>
+                </div>
+              )}
+            </div>
             <button
               className="rounded-md bg-blue-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
               disabled={!canSend}
@@ -169,6 +320,11 @@ export function ChatWorkspace() {
               {isSending ? "Sending..." : "Send"}
             </button>
           </div>
+          {!speechSupported && (
+            <p className="mt-2 text-xs text-slate-500">
+              Voice input not supported in this browser
+            </p>
+          )}
         </form>
       </div>
 
