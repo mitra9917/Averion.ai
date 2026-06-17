@@ -15,10 +15,12 @@ RUN python -m pip install --upgrade pip \
     && pip install -r requirements.txt
 
 COPY app ./app
+COPY start.sh .
 
-RUN mkdir -p /app/uploads
+RUN mkdir -p /app/uploads \
+    && chmod +x start.sh
 
 EXPOSE 8000
 
-# Graceful shutdown: SIGTERM timeout allows 30s for cleanup
-CMD sh -c "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --timeout-graceful-shutdown 30"
+# Start both web server and worker process
+CMD ["./start.sh"]
