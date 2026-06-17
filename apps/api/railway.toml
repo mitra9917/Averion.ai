@@ -1,0 +1,26 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+numReplicas = 1
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+# Memory optimization settings
+[deploy.resources]
+# Increase memory limit to handle ML models
+memoryLimit = "2Gi"
+cpuLimit = "1"
+
+# Environment variables for memory optimization
+[deploy.env]
+# Reduce PyTorch memory usage
+PYTORCH_CUDA_ALLOC_CONF = "max_split_size_mb:128"
+# Limit number of threads
+OMP_NUM_THREADS = "2"
+MKL_NUM_THREADS = "2"
+# Optimize sentence-transformers
+TOKENIZERS_PARALLELISM = "false"
