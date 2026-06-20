@@ -1,4 +1,14 @@
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+import logging
+
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    HTTPException,
+    UploadFile,
+    status
+)
 
 from app.core.auth import RequestContext, get_request_context
 from app.core.organization import get_current_organization_id
@@ -8,13 +18,14 @@ from app.db.documents import (
     get_document_for_organization,
     list_documents
 )
-from app.db.ingestion_jobs import retry_failed_ingestion_job
+from app.db.ingestion_jobs import claim_next_ingestion_job, retry_failed_ingestion_job
 from app.schemas.documents import (
     DocumentDeleteResponse,
     DocumentListItem,
     DocumentRetryResponse,
     DocumentUploadResponse
 )
+from app.services.document_ingestion import process_ingestion_job
 from app.services.document_service import (
     DocumentMetadataStorageError,
     DocumentValidationError,
@@ -26,6 +37,16 @@ from app.services.document_storage import (
 )
 
 router = APIRouter(prefix="/documents", tags=["documents"])
+logger = logging.getLogger(__name__)
+
+
+def process_one_queued_document() -> None:
+    try:
+        job = claim_next_ingestion_job("api-upload-kick")
+        if job is not None:
+            process_ingestion_job(job)
+    except Exception:
+        logger.exception("Upload-triggered document ingestion failed")
 
 
 @router.get("", response_model=list[DocumentListItem])
@@ -62,15 +83,19 @@ def get_documents(
     status_code=status.HTTP_201_CREATED
 )
 async def upload_document(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     context: RequestContext = Depends(get_request_context)
 ) -> DocumentUploadResponse:
     try:
-        return await save_uploaded_document(
+        response = await save_uploaded_document(
             file=file,
             organization_id=context.organization_id,
             uploaded_by_user_id=context.user_id
         )
+        if response.metadata_stored:
+            background_tasks.add_task(process_one_queued_document)
+        return response
     except DocumentValidationError as exc:
         raise HTTPException(
             status_code=exc.status_code,
