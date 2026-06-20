@@ -26,6 +26,26 @@ from app.schemas.chat import ChatCitation, ChatRequest, ChatResponse
 router = APIRouter(prefix="/chat", tags=["chat"])
 
 
+def _build_provider_fallback_answer(chunks: list[dict]) -> str:
+    """Return a cited context summary when the LLM provider is unavailable."""
+    lines = [
+        "The AI provider is temporarily unavailable, but I found relevant context in your documents:"
+    ]
+
+    for index, chunk in enumerate(chunks[:3], start=1):
+        filename = chunk.get("filename") or "Document"
+        text = " ".join(str(chunk.get("text") or "").split())
+        if len(text) > 320:
+            text = f"{text[:317].rstrip()}..."
+        if text:
+            lines.append(f"[{index}] {filename}: {text}")
+
+    if len(lines) == 1:
+        return "The AI provider is temporarily unavailable. Please try again."
+
+    return "\n\n".join(lines)
+
+
 
 
 @router.post("", response_model=ChatResponse)
@@ -168,10 +188,20 @@ async def chat(
             language=request.language
         )
         
-        # Generate answer using LLM
-        # SECURITY: Only the prompt is passed to the LLM
-        # No database_url, raw records, or internal config is exposed
-        answer = generate_answer(prompt, chunks)
+        # Generate answer using LLM.
+        # SECURITY: Only the prompt is passed to the LLM.
+        # No database_url, raw records, or internal config is exposed.
+        try:
+            answer = generate_answer(prompt, chunks)
+        except AIProviderError:
+            log_security_event(
+                event_type="provider_fallback_answer",
+                question=request.question,
+                details={"chunks_retrieved": len(chunks)},
+                organization_id=context.organization_id,
+                user_id=context.user_id
+            )
+            answer = _build_provider_fallback_answer(chunks)
         
         # PHASE 4: Output Filtering - Check for sensitive data leakage
         has_sensitive, sensitive_pattern = contains_sensitive_data(answer)

@@ -208,7 +208,7 @@ def test_chat_endpoint_uses_authenticated_organization_scope(monkeypatch) -> Non
     assert "don't have enough information" in response.json()["answer"].lower()
 
 
-def test_chat_endpoint_returns_safe_503_for_llm_provider_error(monkeypatch) -> None:
+def test_chat_endpoint_returns_cited_fallback_for_llm_provider_error(monkeypatch) -> None:
     def fake_store_chat_exchange(**kwargs) -> StoredChatMessages:
         return StoredChatMessages(
             conversation_id="conv_error",
@@ -245,8 +245,12 @@ def test_chat_endpoint_returns_safe_503_for_llm_provider_error(monkeypatch) -> N
         }
     )
 
-    assert response.status_code == 503
-    assert response.json()["detail"] == "AI provider is temporarily unavailable. Please try again."
+    assert response.status_code == 200
+    body = response.json()
+    assert "AI provider is temporarily unavailable" in body["answer"]
+    assert "Refunds are available within 30 days" in body["answer"]
+    assert body["citations"][0]["filename"] == "policy.pdf"
+    assert body["sources"][0]["chunk_id"] == "doc_123:0"
     assert "sk-" not in response.text
 
 
