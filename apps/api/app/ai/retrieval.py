@@ -8,6 +8,7 @@ def retrieve_chunks(
     query: str,
     top_k: int = 3,
     organization_id: str | None = None,
+    document_id: str | None = None,
     min_score: float | None = None
 ) -> list[dict]:
     """
@@ -56,7 +57,8 @@ def retrieve_chunks(
     results = search_similar(
         query_embedding,
         top_k,
-        organization_id=scoped_org_id
+        organization_id=scoped_org_id,
+        document_id=document_id
     )
     
     # Format output

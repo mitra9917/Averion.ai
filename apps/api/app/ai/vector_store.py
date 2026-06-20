@@ -138,7 +138,8 @@ def store_embeddings(chunks: list[dict], clear_existing: bool = False) -> None:
 def search_similar(
     query_embedding: list[float],
     top_k: int = 3,
-    organization_id: str | None = None
+    organization_id: str | None = None,
+    document_id: str | None = None
 ) -> list[dict]:
     """
     Search for similar chunks using a shared organization-scoped vector table.
@@ -156,6 +157,7 @@ def search_similar(
             }
             for row in _memory_vectors.values()
             if row["organization_id"] == scoped_organization_id
+            and (document_id is None or row["document_id"] == document_id)
         ]
         results.sort(key=lambda row: row["score"])
         return [
@@ -175,6 +177,17 @@ def search_similar(
 
     with psycopg.connect(settings.database_url, connect_timeout=5) as connection:
         with connection.cursor() as cursor:
+            document_filter = ""
+            params: list[object] = [
+                embedding_literal,
+                scoped_organization_id,
+                scoped_organization_id
+            ]
+            if document_id:
+                document_filter = "and document_embeddings.document_id = %s::uuid"
+                params.append(document_id)
+            params.extend([embedding_literal, top_k])
+
             cursor.execute(
                 """
                 select
@@ -190,16 +203,11 @@ def search_similar(
                     on documents.id = document_embeddings.document_id
                 where document_embeddings.organization_id = %s::uuid
                     and documents.organization_id = %s::uuid
+                    {document_filter}
                 order by document_embeddings.embedding <=> %s::vector
                 limit %s
-                """,
-                (
-                    embedding_literal,
-                    scoped_organization_id,
-                    scoped_organization_id,
-                    embedding_literal,
-                    top_k
-                )
+                """.format(document_filter=document_filter),
+                params
             )
 
             return [

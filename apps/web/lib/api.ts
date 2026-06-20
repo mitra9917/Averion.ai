@@ -57,6 +57,7 @@ export type ChatRequest = {
   conversation_id: string | null;
   question: string;
   language?: string;
+  document_id?: string | null;
 };
 
 
