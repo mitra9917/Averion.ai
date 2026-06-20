@@ -2,6 +2,8 @@ import logging
 import os
 import socket
 import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from threading import Thread
 from uuid import uuid4
 
 from app.core.config import settings
@@ -14,6 +16,30 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+
+class WorkerHealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self) -> None:
+        if self.path != "/health":
+            self.send_response(404)
+            self.end_headers()
+            return
+
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(b'{"status":"ok","service":"document-worker"}')
+
+    def log_message(self, format: str, *args: object) -> None:
+        return
+
+
+def start_health_server() -> None:
+    port = int(os.getenv("PORT", "8000"))
+    server = ThreadingHTTPServer(("0.0.0.0", port), WorkerHealthHandler)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    logger.info("Worker health server listening on port %s", port)
 
 
 def build_worker_id() -> str:
@@ -48,4 +74,5 @@ def run_worker() -> None:
 
 
 if __name__ == "__main__":
+    start_health_server()
     run_worker()
