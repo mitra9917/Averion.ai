@@ -2,7 +2,6 @@ import logging
 
 from fastapi import (
     APIRouter,
-    BackgroundTasks,
     Depends,
     File,
     HTTPException,
@@ -18,7 +17,10 @@ from app.db.documents import (
     get_document_for_organization,
     list_documents
 )
-from app.db.ingestion_jobs import claim_next_ingestion_job, retry_failed_ingestion_job
+from app.db.ingestion_jobs import (
+    claim_ingestion_job,
+    retry_failed_ingestion_job
+)
 from app.schemas.documents import (
     DocumentDeleteResponse,
     DocumentListItem,
@@ -40,13 +42,14 @@ router = APIRouter(prefix="/documents", tags=["documents"])
 logger = logging.getLogger(__name__)
 
 
-def process_one_queued_document() -> None:
-    try:
-        job = claim_next_ingestion_job("api-upload-kick")
-        if job is not None:
-            process_ingestion_job(job)
-    except Exception:
-        logger.exception("Upload-triggered document ingestion failed")
+def process_uploaded_document(document_id: str, organization_id: str) -> None:
+    job = claim_ingestion_job(
+        document_id=document_id,
+        organization_id=organization_id,
+        worker_id="api-upload-inline"
+    )
+    if job is not None:
+        process_ingestion_job(job)
 
 
 @router.get("", response_model=list[DocumentListItem])
@@ -83,7 +86,6 @@ def get_documents(
     status_code=status.HTTP_201_CREATED
 )
 async def upload_document(
-    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     context: RequestContext = Depends(get_request_context)
 ) -> DocumentUploadResponse:
@@ -94,7 +96,7 @@ async def upload_document(
             uploaded_by_user_id=context.user_id
         )
         if response.metadata_stored:
-            background_tasks.add_task(process_one_queued_document)
+            process_uploaded_document(response.document_id, context.organization_id)
         return response
     except DocumentValidationError as exc:
         raise HTTPException(

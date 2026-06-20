@@ -191,6 +191,73 @@ def claim_next_ingestion_job(worker_id: str) -> DocumentIngestionJob | None:
     )
 
 
+def claim_ingestion_job(
+    document_id: str,
+    organization_id: str,
+    worker_id: str
+) -> DocumentIngestionJob | None:
+    if not is_database_configured():
+        raise DatabaseNotConfiguredError("DATABASE_URL is not configured.")
+
+    with psycopg.connect(settings.database_url, connect_timeout=5) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                update document_ingestion_jobs jobs
+                set status = 'processing',
+                    attempts = jobs.attempts + 1,
+                    locked_at = now(),
+                    locked_by = %s,
+                    last_error = null,
+                    updated_at = now()
+                from documents
+                where jobs.document_id = %s::uuid
+                  and jobs.organization_id = %s::uuid
+                  and jobs.status = 'queued'
+                  and jobs.attempts < jobs.max_attempts
+                  and jobs.available_at <= now()
+                  and documents.id = jobs.document_id
+                returning
+                  jobs.id::text,
+                  jobs.document_id::text,
+                  jobs.organization_id::text,
+                  documents.filename,
+                  documents.file_type,
+                  documents.storage_path,
+                  jobs.attempts,
+                  jobs.max_attempts
+                """,
+                (worker_id, document_id, organization_id)
+            )
+            row = cursor.fetchone()
+
+            if row is None:
+                return None
+
+            cursor.execute(
+                """
+                update documents
+                set status = 'processing',
+                    error_message = null,
+                    updated_at = now()
+                where id = %s::uuid
+                  and organization_id = %s::uuid
+                """,
+                (document_id, organization_id)
+            )
+
+    return DocumentIngestionJob(
+        job_id=row[0],
+        document_id=row[1],
+        organization_id=row[2],
+        filename=row[3],
+        file_type=row[4],
+        storage_path=row[5],
+        attempts=row[6],
+        max_attempts=row[7]
+    )
+
+
 def clear_document_processing_outputs(document_id: str) -> None:
     if not is_database_configured():
         raise DatabaseNotConfiguredError("DATABASE_URL is not configured.")
