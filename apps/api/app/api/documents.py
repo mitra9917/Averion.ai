@@ -1,5 +1,6 @@
 import logging
 
+import psycopg
 from fastapi import (
     APIRouter,
     Depends,
@@ -43,11 +44,19 @@ logger = logging.getLogger(__name__)
 
 
 def process_uploaded_document(document_id: str, organization_id: str) -> None:
-    job = claim_ingestion_job(
-        document_id=document_id,
-        organization_id=organization_id,
-        worker_id="api-upload-inline"
-    )
+    try:
+        job = claim_ingestion_job(
+            document_id=document_id,
+            organization_id=organization_id,
+            worker_id="api-upload-inline"
+        )
+    except (DatabaseNotConfiguredError, psycopg.Error):
+        logger.info(
+            "Skipping inline document ingestion because the database is unavailable.",
+            extra={"document_id": document_id}
+        )
+        return
+
     if job is not None:
         process_ingestion_job(job)
 
