@@ -69,7 +69,6 @@ function scoreLabel(score: number | null) {
 export function ChatWorkspace() {
   const searchParams = useSearchParams();
   const documentName = searchParams.get("filename");
-  const documentId = searchParams.get("document");
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [conversationTitle, setConversationTitle] = useState("New conversation");
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
@@ -262,8 +261,7 @@ export function ChatWorkspace() {
       const response = await sendChatMessage({
         conversation_id: conversationId,
         question: trimmedQuestion,
-        language: userLanguage,
-        document_id: documentId
+        language: userLanguage
       });
       setConversationId(response.conversation_id);
       setConversationTitle((current) =>

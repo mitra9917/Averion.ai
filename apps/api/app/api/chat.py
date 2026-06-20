@@ -124,7 +124,6 @@ async def chat(
             query=request.question,
             top_k=settings.retrieval_top_k,
             organization_id=context.organization_id,
-            document_id=request.document_id,
             min_score=settings.retrieval_min_score
         )
         
@@ -135,8 +134,7 @@ async def chat(
             details={
                 "chunks_retrieved": len(chunks),
                 "top_k": settings.retrieval_top_k,
-                "min_score": settings.retrieval_min_score,
-                "document_id": request.document_id
+                "min_score": settings.retrieval_min_score
             },
             organization_id=context.organization_id,
             user_id=context.user_id

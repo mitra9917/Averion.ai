@@ -7,7 +7,6 @@ class ChatRequest(BaseModel):
     conversation_id: str | None = None
     question: str = Field(..., min_length=1)
     language: str = "en"
-    document_id: str | None = None
 
 
 class ChatCitation(BaseModel):
