@@ -32,6 +32,8 @@ psql "$DATABASE_URL" --set ON_ERROR_STOP=1 --file supabase/tests/verify_schema.s
    - `CORS_ORIGINS=https://<your-vercel-domain>`
    - `LLM_PROVIDER=openai` or `groq`
    - `LLM_PROVIDER_API_KEY=<real-provider-key>`
+   - `EMBEDDING_MODEL_PRELOAD=false`
+   - `EMBEDDING_BATCH_SIZE=8`
 6. Deploy and confirm:
 
 ```bash
@@ -51,6 +53,20 @@ python -m app.workers.document_ingestion
 ```
 
 Copy the same backend environment variables as the API service. The worker does not need a public domain.
+
+Do not run the worker inside the API service. The API service should only run:
+
+```bash
+uvicorn app.main:app --host 0.0.0.0 --port $PORT
+```
+
+The worker service should be the only service running:
+
+```bash
+python -m app.workers.document_ingestion
+```
+
+If Railway shows "Out of memory", check that the API and worker are not running in the same service, keep `EMBEDDING_BATCH_SIZE=8`, and upgrade the worker memory before upgrading the API memory.
 
 ## 4. Vercel Web App
 
