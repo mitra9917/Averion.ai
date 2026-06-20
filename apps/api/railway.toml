@@ -24,3 +24,5 @@ OMP_NUM_THREADS = "2"
 MKL_NUM_THREADS = "2"
 # Optimize sentence-transformers
 TOKENIZERS_PARALLELISM = "false"
+EMBEDDING_MODEL_PRELOAD = "false"
+EMBEDDING_BATCH_SIZE = "8"

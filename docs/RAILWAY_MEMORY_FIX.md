@@ -116,4 +116,7 @@ These changes optimize memory usage by:
 3. Limiting thread parallelism
 4. Increasing Railway memory allocation
 
-The worker should now run successfully alongside the web server.
+The worker should not run alongside the web server in the same Railway service.
+Use one Railway service for the FastAPI web server and a second Railway service
+for `python -m app.workers.document_ingestion`. Running both processes in one
+container can still exhaust memory during embedding generation.
