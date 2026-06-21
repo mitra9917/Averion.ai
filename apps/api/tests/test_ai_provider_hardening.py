@@ -91,6 +91,42 @@ def test_groq_chat_does_not_default_to_openai_model(monkeypatch) -> None:
     assert FakeOpenAI.instances[0].chat_completions.calls[0]["model"] == "llama-3.1-8b-instant"
 
 
+def test_groq_chat_fails_over_to_secondary_model(monkeypatch) -> None:
+    class FailingFirstModelCompletions:
+        def __init__(self) -> None:
+            self.calls: list[dict] = []
+
+        def create(self, **kwargs):
+            self.calls.append(kwargs)
+            if kwargs["model"] == "llama-3.1-8b-instant":
+                raise RuntimeError("model temporarily unavailable")
+            return SimpleNamespace(
+                choices=[SimpleNamespace(message=SimpleNamespace(content="fallback model answer"))]
+            )
+
+    class FallbackOpenAI(FakeOpenAI):
+        def __init__(self, **kwargs) -> None:
+            super().__init__(**kwargs)
+            self.chat_completions = FailingFirstModelCompletions()
+            self.chat = SimpleNamespace(completions=self.chat_completions)
+
+    monkeypatch.setattr(settings, "llm_provider", "groq")
+    monkeypatch.setattr(settings, "llm_provider_api_key", "gsk_test_secret")
+    monkeypatch.setattr(settings, "llm_provider_base_url", None)
+    monkeypatch.setattr(settings, "llm_provider_max_retries", 0)
+    monkeypatch.setattr(settings, "llm_model_name", "gpt-4o-mini")
+    monkeypatch.setattr(llm_service, "_get_openai_client_class", lambda: FallbackOpenAI)
+
+    answer = llm_service.generate_answer("prompt")
+
+    calls = FallbackOpenAI.instances[0].chat_completions.calls
+    assert answer == "fallback model answer"
+    assert [call["model"] for call in calls] == [
+        "llama-3.1-8b-instant",
+        "llama-3.3-70b-versatile",
+    ]
+
+
 def test_chat_provider_errors_are_sanitized_and_bounded(monkeypatch) -> None:
     class FailingCompletions:
         attempts = 0
