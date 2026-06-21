@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+from app.core.config import Settings
 from app.db.connection import DatabaseConnectionCheck
 from app.main import app
 
@@ -107,3 +108,22 @@ def test_ai_health_check_detects_missing_external_chat_key(monkeypatch) -> None:
   assert chat["status"] == "degraded"
   assert chat["ready"] is False
   assert chat["error"] == "missing_api_key"
+
+
+def test_settings_strip_wrapping_quotes_from_dashboard_env_values() -> None:
+  settings = Settings(
+    llm_provider='"groq"',
+    llm_provider_api_key='"gsk_test_secret"',
+    llm_model_name='"llama-3.1-8b-instant"',
+    supabase_storage_bucket='"documents"',
+    cors_origins='"https://averion-ai.vercel.app,http://localhost:3000"'
+  )
+
+  assert settings.llm_provider == "groq"
+  assert settings.llm_provider_api_key == "gsk_test_secret"
+  assert settings.llm_model_name == "llama-3.1-8b-instant"
+  assert settings.supabase_storage_bucket == "documents"
+  assert settings.allowed_cors_origins == [
+    "https://averion-ai.vercel.app",
+    "http://localhost:3000"
+  ]

@@ -1,3 +1,6 @@
+from typing import Any
+
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -49,6 +52,17 @@ class Settings(BaseSettings):
     embedding_model_preload: bool = False
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def strip_wrapping_quotes(cls, value: Any) -> Any:
+        if not isinstance(value, str):
+            return value
+
+        stripped = value.strip()
+        if len(stripped) >= 2 and stripped[0] == stripped[-1] and stripped[0] in {"'", '"'}:
+            return stripped[1:-1]
+        return stripped
 
     @property
     def allowed_cors_origins(self) -> list[str]:
