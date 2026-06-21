@@ -43,6 +43,8 @@ class Settings(BaseSettings):
     llm_model_name: str = "gpt-4o-mini"
     llm_temperature: float = 0.2
     llm_max_tokens: int = 1000
+    rag_prompt_max_context_chars: int = 4_500
+    rag_prompt_max_chunk_chars: int = 850
     transcription_provider: str = "disabled"
     transcription_provider_api_key: str = ""
     transcription_provider_base_url: str | None = None

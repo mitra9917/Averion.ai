@@ -3,6 +3,7 @@ Test that citations use user-friendly format instead of raw UUIDs.
 """
 
 from app.ai.prompt_builder import build_rag_prompt
+from app.core.config import settings
 
 
 def test_prompt_uses_numbered_citations():
@@ -52,6 +53,29 @@ def test_prompt_instructs_numbered_citation_usage():
     # Should contain instructions about using numbered citations
     assert "[1]" in prompt or "[Source 1]" in prompt
     assert "NOT the internal IDs" in prompt or "numbered citations" in prompt.lower()
+
+
+def test_prompt_context_is_capped_for_provider_token_limits(monkeypatch):
+    monkeypatch.setattr(settings, "rag_prompt_max_context_chars", 1200)
+    monkeypatch.setattr(settings, "rag_prompt_max_chunk_chars", 400)
+
+    chunks = [
+        {
+            "document_id": f"doc{i}",
+            "chunk_index": i,
+            "chunk_id": f"doc{i}:0",
+            "text": f"Important methodology detail {i}. " + ("extra context " * 400)
+        }
+        for i in range(8)
+    ]
+
+    prompt = build_rag_prompt("What methodology is proposed?", chunks)
+
+    assert len(prompt) < 4_000
+    assert "[Source 1]" in prompt
+    assert "[Source 3]" in prompt
+    assert "[Source 8]" not in prompt
+    assert "..." in prompt
 
 
 # Made with Bob

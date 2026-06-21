@@ -4,6 +4,8 @@ RAG Prompt Builder
 Builds structured prompts for LLM using retrieved document chunks.
 """
 
+from app.core.config import settings
+
 # Language name mapping for natural language instructions
 LANGUAGE_NAMES = {
     "en": "English",
@@ -13,6 +15,17 @@ LANGUAGE_NAMES = {
     "de": "German",
     "ja": "Japanese"
 }
+
+
+def _compact_chunk_text(text: str, max_chars: int) -> str:
+    """Keep each source small enough for low-TPM providers."""
+    normalized = " ".join((text or "").split())
+    if len(normalized) <= max_chars:
+        return normalized
+
+    head_chars = max(1, int(max_chars * 0.72))
+    tail_chars = max(1, max_chars - head_chars - 20)
+    return f"{normalized[:head_chars].rstrip()} ... {normalized[-tail_chars:].lstrip()}"
 
 
 def build_rag_prompt(question: str, chunks: list[dict], language: str = "en") -> str:
@@ -72,8 +85,15 @@ def build_rag_prompt(question: str, chunks: list[dict], language: str = "en") ->
         prompt_parts.append("No relevant context provided.")
     else:
         # Add all chunks with numbered citations for user-friendly references
+        context_chars_used = 0
         for idx, chunk in enumerate(chunks, start=1):
-            text = chunk.get("text", "")
+            remaining_context = settings.rag_prompt_max_context_chars - context_chars_used
+            if remaining_context <= 0:
+                break
+
+            chunk_limit = min(settings.rag_prompt_max_chunk_chars, remaining_context)
+            text = _compact_chunk_text(chunk.get("text", ""), chunk_limit)
+            context_chars_used += len(text)
 
             # Format: [Source N] for user-friendly citation
             prompt_parts.append(f"[Source {idx}]")
