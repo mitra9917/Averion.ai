@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     transcription_timeout_seconds: float = 60.0
     transcription_max_retries: int = 2
     embedding_model_preload: bool = False
+    pdf_ocr_enabled: bool = True
+    pdf_ocr_max_pages: int = 8
+    pdf_ocr_dpi: int = 200
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
