@@ -9,6 +9,8 @@ from app.ai.provider_utils import (
 )
 
 GROQ_BASE_URL = "https://api.groq.com/openai/v1"
+GROQ_DEFAULT_CHAT_MODEL = "llama-3.1-8b-instant"
+OPENAI_DEFAULT_CHAT_MODEL = "gpt-4o-mini"
 
 
 def _get_openai_client_class():
@@ -84,7 +86,7 @@ def _call_openai_compatible_chat(prompt: str, provider: str) -> str:
 
     def operation() -> str:
         response = client.chat.completions.create(
-            model=settings.llm_model_name,
+            model=get_chat_model_name(provider),
             messages=[{"role": "user", "content": prompt}],
             temperature=settings.llm_temperature,
             max_tokens=settings.llm_max_tokens
@@ -103,6 +105,26 @@ def _call_openai_compatible_chat(prompt: str, provider: str) -> str:
         attempts=settings.llm_provider_max_retries + 1,
         public_message=provider_failure_message("AI provider")
     )
+
+
+def get_chat_model_name(provider: str | None = None) -> str:
+    """Return a provider-compatible chat model.
+
+    This keeps production resilient when Groq is selected but an OpenAI model
+    name is missing or accidentally left in the environment.
+    """
+    normalized_provider = (provider or settings.llm_provider).lower()
+    configured_model = (settings.llm_model_name or "").strip()
+
+    if normalized_provider == "groq" and (
+        not configured_model or configured_model == OPENAI_DEFAULT_CHAT_MODEL
+    ):
+        return GROQ_DEFAULT_CHAT_MODEL
+
+    if not configured_model:
+        return OPENAI_DEFAULT_CHAT_MODEL
+
+    return configured_model
 
 
 def _call_mock(prompt: str, chunks: list[dict]) -> str:

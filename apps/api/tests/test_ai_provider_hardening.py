@@ -76,6 +76,21 @@ def test_groq_chat_uses_configured_model_timeout_and_retries(monkeypatch) -> Non
     assert client.chat_completions.calls[0]["max_tokens"] == 321
 
 
+def test_groq_chat_does_not_default_to_openai_model(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "llm_provider", "groq")
+    monkeypatch.setattr(settings, "llm_provider_api_key", "gsk_test_secret")
+    monkeypatch.setattr(settings, "llm_provider_base_url", None)
+    monkeypatch.setattr(settings, "llm_provider_timeout_seconds", 12.0)
+    monkeypatch.setattr(settings, "llm_provider_max_retries", 0)
+    monkeypatch.setattr(settings, "llm_model_name", "gpt-4o-mini")
+    monkeypatch.setattr(llm_service, "_get_openai_client_class", lambda: FakeOpenAI)
+
+    answer = llm_service.generate_answer("prompt")
+
+    assert answer == "provider answer"
+    assert FakeOpenAI.instances[0].chat_completions.calls[0]["model"] == "llama-3.1-8b-instant"
+
+
 def test_chat_provider_errors_are_sanitized_and_bounded(monkeypatch) -> None:
     class FailingCompletions:
         attempts = 0
