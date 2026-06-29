@@ -601,6 +601,46 @@ def accept_organization_invitation(
 
             cursor.execute(
                 """
+                update documents
+                set uploaded_by_user_id = null
+                where uploaded_by_user_id = %s::uuid
+                    and organization_id <> %s::uuid
+                """,
+                (
+                    user_id,
+                    target_organization_id
+                )
+            )
+            cursor.execute(
+                """
+                update conversations
+                set user_id = null
+                where user_id = %s::uuid
+                    and organization_id <> %s::uuid
+                """,
+                (
+                    user_id,
+                    target_organization_id
+                )
+            )
+            cursor.execute(
+                """
+                update organization_invitations
+                set
+                    status = 'revoked',
+                    updated_at = now()
+                where invited_by_user_id = %s::uuid
+                    and organization_id <> %s::uuid
+                    and status = 'pending'
+                """,
+                (
+                    user_id,
+                    target_organization_id
+                )
+            )
+
+            cursor.execute(
+                """
                 update users
                 set
                     organization_id = %s::uuid,

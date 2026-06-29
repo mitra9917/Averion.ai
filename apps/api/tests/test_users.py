@@ -418,9 +418,18 @@ def test_accept_invitation_locks_and_updates_only_matching_pending_email(monkeyp
     )
 
     invitation_lookup_query, _lookup_params = cursor.statements[0]
-    invitation_update_query, invitation_update_params = cursor.statements[2]
+    documents_detach_query, documents_detach_params = cursor.statements[1]
+    conversations_detach_query, conversations_detach_params = cursor.statements[2]
+    sent_invites_revoke_query, sent_invites_revoke_params = cursor.statements[3]
+    invitation_update_query, invitation_update_params = cursor.statements[5]
     assert profile.organization_id == target_organization_id
     assert "for update" in invitation_lookup_query
+    assert "set uploaded_by_user_id = null" in documents_detach_query
+    assert documents_detach_params == (user_id, target_organization_id)
+    assert "set user_id = null" in conversations_detach_query
+    assert conversations_detach_params == (user_id, target_organization_id)
+    assert "status = 'revoked'" in sent_invites_revoke_query
+    assert sent_invites_revoke_params == (user_id, target_organization_id)
     assert "and invited_email = %s" in invitation_update_query
     assert "and status = 'pending'" in invitation_update_query
     assert "and expires_at > now()" in invitation_update_query
