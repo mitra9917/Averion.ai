@@ -8,7 +8,8 @@ from app.schemas.health import AIHealthResponse, DatabaseHealthResponse, HealthR
 router = APIRouter(tags=["health"])
 
 
-@router.api_route("/health", methods=["GET", "HEAD"], response_model=HealthResponse)
+@router.get("/health", response_model=HealthResponse)
+@router.head("/health")
 def health_check() -> HealthResponse:
     return HealthResponse(
         status="ok",
