@@ -37,7 +37,8 @@ class Settings(BaseSettings):
     llm_provider_base_url: str | None = None
     llm_provider_timeout_seconds: float = 30.0
     llm_provider_max_retries: int = 2
-    llm_model_name: str = "gpt-4o-mini"
+    # Groq production model; available on Groq's free tier within its rate limits.
+    llm_model_name: str = "openai/gpt-oss-120b"
     llm_temperature: float = 0.2
     llm_max_tokens: int = 1000
     transcription_provider: str = "disabled"

@@ -480,7 +480,7 @@ RETRIEVAL_MIN_SCORE=0.7
 # LLM Configuration
 LLM_PROVIDER=groq
 LLM_PROVIDER_API_KEY=[your-groq-api-key]
-LLM_MODEL_NAME=llama-3.3-70b-versatile
+LLM_MODEL_NAME=openai/gpt-oss-120b
 LLM_TEMPERATURE=0.2
 LLM_MAX_TOKENS=1000
 ```
@@ -693,7 +693,7 @@ CORS_ORIGINS=https://[frontend-domain]
 EMBEDDING_MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
 RETRIEVAL_TOP_K=5
 RETRIEVAL_MIN_SCORE=0.7
-LLM_MODEL_NAME=llama-3.3-70b-versatile
+LLM_MODEL_NAME=openai/gpt-oss-120b
 LLM_TEMPERATURE=0.2
 LLM_MAX_TOKENS=1000
 

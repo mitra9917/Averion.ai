@@ -93,7 +93,7 @@ Get OpenAI API key from: https://platform.openai.com/api-keys
 ```
 LLM_PROVIDER=groq
 LLM_PROVIDER_API_KEY=your-groq-api-key
-LLM_MODEL_NAME=llama-3.1-70b-versatile
+LLM_MODEL_NAME=openai/gpt-oss-120b
 ```
 
 Get Groq API key from: https://console.groq.com/keys
