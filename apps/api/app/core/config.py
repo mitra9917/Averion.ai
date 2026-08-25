@@ -24,7 +24,8 @@ class Settings(BaseSettings):
     document_job_lease_seconds: int = 900
     document_worker_poll_seconds: float = 2.0
     document_max_chunks: int = 2_000
-    embedding_batch_size: int = 32
+    # Conservative default for memory-constrained deployment instances.
+    embedding_batch_size: int = 8
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
     security_headers_enabled: bool = True
     request_logging_enabled: bool = True
@@ -53,8 +54,8 @@ class Settings(BaseSettings):
     transcription_model_name: str = "whisper-large-v3"
     transcription_timeout_seconds: float = 60.0
     transcription_max_retries: int = 2
-    # Keep the first document/chat request fast by loading the local model at startup.
-    embedding_model_preload: bool = True
+    # Avoid loading PyTorch and the embedding model before the web server binds.
+    embedding_model_preload: bool = False
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

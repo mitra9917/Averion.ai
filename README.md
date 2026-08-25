@@ -211,7 +211,7 @@ CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 
 # Embeddings
 EMBEDDING_MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
-EMBEDDING_BATCH_SIZE=32
+EMBEDDING_BATCH_SIZE=8
 
 # Document ingestion worker
 DOCUMENT_JOB_MAX_ATTEMPTS=3

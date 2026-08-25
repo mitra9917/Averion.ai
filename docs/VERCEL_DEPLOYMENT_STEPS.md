@@ -1,7 +1,7 @@
 # Vercel Deployment - Step by Step Guide
 
 ## Prerequisites
-✅ Railway API deployed and URL obtained
+✅ Render API deployed and URL obtained
 ✅ Vercel connected to GitHub
 
 ## Step 1: Import Project to Vercel
@@ -32,9 +32,9 @@ Add these variables (click **Add** for each):
 
 #### API Connection
 ```
-NEXT_PUBLIC_API_BASE_URL=https://your-railway-api.up.railway.app
+NEXT_PUBLIC_API_BASE_URL=https://your-render-service.onrender.com
 ```
-**Replace with your actual Railway API URL from Step 4 of Railway deployment**
+**Replace with your actual Render API URL from `RENDER_DEPLOYMENT.md`.**
 
 #### Supabase Configuration (Get from Supabase Dashboard)
 ```
@@ -87,13 +87,13 @@ After successful deployment:
 5. Click **Save**
 6. **Redeploy** (Deployments tab → Click ⋯ → Redeploy)
 
-### Update Railway CORS
+### Update Render CORS
 
-1. Go back to Railway Dashboard
-2. Click your API service → **Variables**
+1. Go to Render Dashboard
+2. Click your API service → **Environment**
 3. Find `CORS_ORIGINS`
 4. Update to: `https://your-vercel-domain.vercel.app`
-5. Railway will automatically redeploy
+5. Redeploy the Render service if prompted
 
 ## Step 7: Configure Supabase OAuth Redirects
 
@@ -112,7 +112,7 @@ After successful deployment:
 ### Test API Connection
 1. Open browser console (F12)
 2. Try to sign up or log in
-3. Check Network tab for API calls to your Railway URL
+3. Check Network tab for API calls to your Render URL
 
 ### Test Authentication
 1. Try signing up with email
@@ -138,8 +138,8 @@ For automatic preview deployments on pull requests:
 
 ### "API connection failed" errors
 - Verify NEXT_PUBLIC_API_BASE_URL is correct
-- Check Railway API is running: `curl https://your-railway-api.up.railway.app/health`
-- Verify CORS_ORIGINS in Railway includes your Vercel domain
+- Check Render API is running: `curl https://your-render-service.onrender.com/health`
+- Verify CORS_ORIGINS in Render includes your Vercel domain
 
 ### Authentication doesn't work
 - Verify NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are correct
@@ -147,15 +147,15 @@ For automatic preview deployments on pull requests:
 - Verify NEXT_PUBLIC_AUTH_REDIRECT_URL matches your actual domain
 
 ### "CORS policy" errors in browser console
-- Update CORS_ORIGINS in Railway to include your Vercel domain
+- Update CORS_ORIGINS in Render to include your Vercel domain
 - Make sure there are no trailing slashes
-- Railway will auto-redeploy after variable change
+- Redeploy the Render service after changing variables when required
 
 ## Environment Variables Summary
 
 ### Production Variables (Required)
 ```
-NEXT_PUBLIC_API_BASE_URL=https://your-railway-api.up.railway.app
+NEXT_PUBLIC_API_BASE_URL=https://your-render-service.onrender.com
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 NEXT_PUBLIC_AUTH_REDIRECT_URL=https://your-vercel-domain.vercel.app/auth/callback
@@ -175,16 +175,16 @@ After successful Vercel deployment:
 3. ✅ Try the chat functionality
 4. ✅ Verify authentication works
 5. ✅ Check that documents are stored in Supabase Storage
-6. ✅ Monitor Railway and Vercel logs for any errors
+6. ✅ Monitor Render and Vercel logs for any errors
 
 ## Complete Deployment Checklist
 
-- [ ] Railway API deployed and healthy
-- [ ] PostgreSQL database created in Railway
+- [ ] Render API deployed and healthy
+- [ ] Supabase PostgreSQL database configured
 - [ ] Supabase project configured
 - [ ] Supabase Storage bucket created
 - [ ] Vercel frontend deployed
-- [ ] Environment variables set in both Railway and Vercel
+- [ ] Environment variables set in both Render and Vercel
 - [ ] CORS configured correctly
 - [ ] OAuth redirect URLs configured in Supabase
 - [ ] Test authentication flow
