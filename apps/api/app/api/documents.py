@@ -1,8 +1,10 @@
 import logging
+import time
 
 import psycopg
 from fastapi import (
     APIRouter,
+    BackgroundTasks,
     Depends,
     File,
     HTTPException,
@@ -95,9 +97,11 @@ def get_documents(
     status_code=status.HTTP_201_CREATED
 )
 async def upload_document(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     context: RequestContext = Depends(get_request_context)
 ) -> DocumentUploadResponse:
+    started_at = time.perf_counter()
     try:
         response = await save_uploaded_document(
             file=file,
@@ -105,7 +109,17 @@ async def upload_document(
             uploaded_by_user_id=context.user_id
         )
         if response.metadata_stored:
-            process_uploaded_document(response.document_id, context.organization_id)
+            background_tasks.add_task(
+                process_uploaded_document,
+                response.document_id,
+                context.organization_id
+            )
+        logger.info(
+            "Document upload queued: document_id=%s metadata_stored=%s request_ms=%.1f",
+            response.document_id,
+            response.metadata_stored,
+            (time.perf_counter() - started_at) * 1000
+        )
         return response
     except DocumentValidationError as exc:
         raise HTTPException(

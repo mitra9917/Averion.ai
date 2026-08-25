@@ -1,7 +1,12 @@
+import logging
+import time
+
 from app.ai.embeddings import embed_text
 from app.ai.security import filter_chunks_by_score
 from app.ai.vector_store import search_similar
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 def retrieve_chunks(
@@ -47,17 +52,21 @@ def retrieve_chunks(
         return []
     
     # Generate query embedding
+    embedding_started_at = time.perf_counter()
     query_embedding = embed_text(query)
+    embedding_ms = (time.perf_counter() - embedding_started_at) * 1000
     
     # Determine organization scope
     scoped_org_id = organization_id or settings.default_organization_id
     
     # Call vector search with organization isolation
+    vector_search_started_at = time.perf_counter()
     results = search_similar(
         query_embedding,
         top_k,
         organization_id=scoped_org_id
     )
+    vector_search_ms = (time.perf_counter() - vector_search_started_at) * 1000
     
     # Format output
     output = []
@@ -74,8 +83,17 @@ def retrieve_chunks(
     
     # Apply cosine distance threshold filtering
     threshold = min_score if min_score is not None else settings.retrieval_min_score
+    filtering_started_at = time.perf_counter()
     filtered_output = filter_chunks_by_score(output, threshold)
-    
+    filtering_ms = (time.perf_counter() - filtering_started_at) * 1000
+    logger.info(
+        "Retrieval latency: embedding_ms=%.1f vector_search_ms=%.1f filtering_ms=%.1f results=%s",
+        embedding_ms,
+        vector_search_ms,
+        filtering_ms,
+        len(filtered_output)
+    )
+
     return filtered_output
 
 # Made with Bob

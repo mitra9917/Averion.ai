@@ -38,12 +38,13 @@ class Settings(BaseSettings):
     llm_provider: str = "mock"
     llm_provider_api_key: str = ""
     llm_provider_base_url: str | None = None
-    llm_provider_timeout_seconds: float = 30.0
-    llm_provider_max_retries: int = 2
-    # Groq production model; available on Groq's free tier within its rate limits.
-    llm_model_name: str = "openai/gpt-oss-120b"
+    llm_provider_timeout_seconds: float = 12.0
+    # One retry handles transient provider failures without multiplying latency.
+    llm_provider_max_retries: int = 1
+    # Groq's fast, low-cost production model; free-tier rate limits apply.
+    llm_model_name: str = "openai/gpt-oss-20b"
     llm_temperature: float = 0.2
-    llm_max_tokens: int = 1000
+    llm_max_tokens: int = 600
     rag_prompt_max_context_chars: int = 4_500
     rag_prompt_max_chunk_chars: int = 850
     transcription_provider: str = "disabled"
@@ -52,7 +53,8 @@ class Settings(BaseSettings):
     transcription_model_name: str = "whisper-large-v3"
     transcription_timeout_seconds: float = 60.0
     transcription_max_retries: int = 2
-    embedding_model_preload: bool = False
+    # Keep the first document/chat request fast by loading the local model at startup.
+    embedding_model_preload: bool = True
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

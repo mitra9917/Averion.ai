@@ -88,43 +88,51 @@ def test_groq_chat_does_not_default_to_openai_model(monkeypatch) -> None:
     answer = llm_service.generate_answer("prompt")
 
     assert answer == "provider answer"
-    assert FakeOpenAI.instances[0].chat_completions.calls[0]["model"] == "llama-3.1-8b-instant"
+    assert FakeOpenAI.instances[0].chat_completions.calls[0]["model"] == "openai/gpt-oss-20b"
 
 
-def test_groq_chat_fails_over_to_secondary_model(monkeypatch) -> None:
-    class FailingFirstModelCompletions:
-        def __init__(self) -> None:
-            self.calls: list[dict] = []
-
-        def create(self, **kwargs):
-            self.calls.append(kwargs)
-            if kwargs["model"] == "llama-3.1-8b-instant":
-                raise RuntimeError("model temporarily unavailable")
-            return SimpleNamespace(
-                choices=[SimpleNamespace(message=SimpleNamespace(content="fallback model answer"))]
-            )
-
-    class FallbackOpenAI(FakeOpenAI):
-        def __init__(self, **kwargs) -> None:
-            super().__init__(**kwargs)
-            self.chat_completions = FailingFirstModelCompletions()
-            self.chat = SimpleNamespace(completions=self.chat_completions)
-
+def test_groq_chat_uses_one_supported_model(monkeypatch) -> None:
     monkeypatch.setattr(settings, "llm_provider", "groq")
     monkeypatch.setattr(settings, "llm_provider_api_key", "gsk_test_secret")
     monkeypatch.setattr(settings, "llm_provider_base_url", None)
     monkeypatch.setattr(settings, "llm_provider_max_retries", 0)
     monkeypatch.setattr(settings, "llm_model_name", "gpt-4o-mini")
-    monkeypatch.setattr(llm_service, "_get_openai_client_class", lambda: FallbackOpenAI)
+    monkeypatch.setattr(llm_service, "_get_openai_client_class", lambda: FakeOpenAI)
 
     answer = llm_service.generate_answer("prompt")
 
-    calls = FallbackOpenAI.instances[0].chat_completions.calls
-    assert answer == "fallback model answer"
-    assert [call["model"] for call in calls] == [
-        "llama-3.1-8b-instant",
-        "llama-3.3-70b-versatile",
-    ]
+    calls = FakeOpenAI.instances[0].chat_completions.calls
+    assert answer == "provider answer"
+    assert [call["model"] for call in calls] == ["openai/gpt-oss-20b"]
+
+
+def test_groq_chat_retries_one_transient_failure(monkeypatch) -> None:
+    class TransientError(RuntimeError):
+        status_code = 503
+
+    class FlakyCompletions(FakeChatCompletions):
+        def create(self, **kwargs):
+            self.calls.append(kwargs)
+            if len(self.calls) == 1:
+                raise TransientError("service unavailable")
+            return SimpleNamespace(
+                choices=[SimpleNamespace(message=SimpleNamespace(content="recovered"))]
+            )
+
+    class FlakyOpenAI(FakeOpenAI):
+        def __init__(self, **kwargs) -> None:
+            super().__init__(**kwargs)
+            self.chat_completions = FlakyCompletions()
+            self.chat = SimpleNamespace(completions=self.chat_completions)
+
+    monkeypatch.setattr(settings, "llm_provider", "groq")
+    monkeypatch.setattr(settings, "llm_provider_api_key", "gsk_test_secret")
+    monkeypatch.setattr(settings, "llm_provider_max_retries", 1)
+    monkeypatch.setattr(settings, "llm_model_name", "openai/gpt-oss-20b")
+    monkeypatch.setattr(llm_service, "_get_openai_client_class", lambda: FlakyOpenAI)
+
+    assert llm_service.generate_answer("prompt") == "recovered"
+    assert len(FlakyOpenAI.instances[0].chat_completions.calls) == 2
 
 
 def test_chat_provider_errors_are_sanitized_and_bounded(monkeypatch) -> None:

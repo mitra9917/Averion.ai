@@ -1,5 +1,7 @@
 import logging
 import os
+from collections import OrderedDict
+from threading import Lock
 from typing import Any
 
 from app.core.config import settings
@@ -9,6 +11,9 @@ logger = logging.getLogger(__name__)
 MODEL_NAME = settings.embedding_model_name
 _model: Any | None = None
 _model_error: str | None = None
+_embedding_cache: OrderedDict[str, list[float]] = OrderedDict()
+_embedding_cache_lock = Lock()
+_EMBEDDING_CACHE_SIZE = 2_048
 
 
 def get_embedding_model() -> Any:
@@ -72,8 +77,25 @@ def embed_text(text: str) -> list[float]:
     Returns:
         List of floats representing the embedding vector
     """
-    embedding = get_embedding_model().encode(text)
-    return embedding.tolist()
+    normalized_text = text.strip()
+    with _embedding_cache_lock:
+        cached = _embedding_cache.get(normalized_text)
+        if cached is not None:
+            _embedding_cache.move_to_end(normalized_text)
+            return cached.copy()
+
+    embedding = get_embedding_model().encode(normalized_text).tolist()
+    _cache_embeddings({normalized_text: embedding})
+    return embedding
+
+
+def _cache_embeddings(embeddings: dict[str, list[float]]) -> None:
+    with _embedding_cache_lock:
+        for text, embedding in embeddings.items():
+            _embedding_cache[text] = embedding
+            _embedding_cache.move_to_end(text)
+        while len(_embedding_cache) > _EMBEDDING_CACHE_SIZE:
+            _embedding_cache.popitem(last=False)
 
 
 def generate_embeddings(
@@ -106,20 +128,40 @@ def generate_embeddings(
     if not eligible_chunks:
         return chunks
 
-    model = get_embedding_model()
     texts = [str(chunk["text"]).strip() for chunk in eligible_chunks]
-    embeddings = model.encode(
-        texts,
-        batch_size=batch_size or settings.embedding_batch_size,
-        show_progress_bar=False
-    )
+    uncached_texts: list[str] = []
+    uncached_text_set: set[str] = set()
+    embeddings_by_text: dict[str, list[float]] = {}
+    with _embedding_cache_lock:
+        for text in texts:
+            cached = _embedding_cache.get(text)
+            if cached is not None:
+                _embedding_cache.move_to_end(text)
+                embeddings_by_text[text] = cached
+            elif text not in embeddings_by_text and text not in uncached_text_set:
+                uncached_texts.append(text)
+                uncached_text_set.add(text)
 
-    for chunk, embedding in zip(eligible_chunks, embeddings):
-        chunk["embedding"] = embedding.tolist()
+    if uncached_texts:
+        model = get_embedding_model()
+        generated_embeddings = model.encode(
+            uncached_texts,
+            batch_size=batch_size or settings.embedding_batch_size,
+            show_progress_bar=False
+        )
+        generated_by_text = {
+            text: embedding.tolist()
+            for text, embedding in zip(uncached_texts, generated_embeddings)
+        }
+        embeddings_by_text.update(generated_by_text)
+        _cache_embeddings(generated_by_text)
+
+    for chunk, text in zip(eligible_chunks, texts):
+        chunk["embedding"] = embeddings_by_text[text].copy()
     
     logger.info(
         f"Embedding generation complete. "
-        f"Processed: {len(eligible_chunks)}, Failed: {failed_count}, "
+        f"Processed: {len(eligible_chunks)}, Cached: {len(eligible_chunks) - len(uncached_texts)}, Failed: {failed_count}, "
         f"Model: {MODEL_NAME}"
     )
     
