@@ -25,7 +25,7 @@ Averion.ai is a **Retrieval-Augmented Generation (RAG)** system that combines:
 ### Core AI/ML Stack
 - **Embeddings**: sentence-transformers (all-MiniLM-L6-v2)
 - **Vector Database**: PostgreSQL with pgvector extension
-- **LLM Providers**: OpenAI, Groq (GPT-OSS 120B), Mock
+- **LLM Providers**: OpenAI, Groq (GPT-OSS 20B), Mock
 - **Speech-to-Text**: Groq Whisper API (whisper-large-v3)
 - **NLP**: Regex-based pattern matching, sentence segmentation
 
@@ -256,9 +256,9 @@ def _cosine_distance(left: list[float], right: list[float]) -> float:
 - **Use Case**: Production-grade answers
 
 #### Groq
-- **Model**: openai/gpt-oss-120b
+- **Model**: openai/gpt-oss-20b
 - **API**: OpenAI-compatible endpoint
-- **Speed**: Ultra-fast inference (~500 tokens/sec)
+- **Speed**: Ultra-fast inference (~1,000 tokens/sec)
 - **Use Case**: Cost-effective production
 
 #### Mock Provider
@@ -495,7 +495,7 @@ def _call_openai(prompt: str) -> str:
     client = OpenAI(api_key=settings.llm_provider_api_key)
     
     response = client.chat.completions.create(
-        model=settings.llm_model_name,  # openai/gpt-oss-120b for Groq
+        model=settings.llm_model_name,  # openai/gpt-oss-20b for Groq
         messages=[{"role": "user", "content": prompt}],
         temperature=settings.llm_temperature,  # 0.2
         max_tokens=settings.llm_max_tokens  # 1000
@@ -505,7 +505,7 @@ def _call_openai(prompt: str) -> str:
 ```
 
 **Configuration**:
-- **Model**: GPT-OSS 120B via Groq (current supported default)
+- **Model**: GPT-OSS 20B via Groq (current supported default)
 - **Temperature**: 0.2 (low randomness, consistent answers)
 - **Max Tokens**: 1000 (concise responses)
 
@@ -522,7 +522,7 @@ def _call_groq(prompt: str) -> str:
     )
     
     response = client.chat.completions.create(
-        model="openai/gpt-oss-120b",
+        model="openai/gpt-oss-20b",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.2
     )
@@ -533,7 +533,7 @@ def _call_groq(prompt: str) -> str:
 **Why Groq?**
 - **Speed**: 500+ tokens/second (10x faster than OpenAI)
 - **Cost**: More affordable than OpenAI
-- **Quality**: GPT-OSS 120B is Groq's current production replacement for Llama 3.3 70B
+- **Quality**: GPT-OSS 20B is Groq's supported compact production model for fast document Q&A
 - **Compatibility**: OpenAI-compatible API
 
 ### 3. Mock Provider (Testing)
@@ -1160,7 +1160,7 @@ os.environ.setdefault("MKL_NUM_THREADS", "2")
 
 1. **Embeddings**: sentence-transformers (all-MiniLM-L6-v2)
 2. **Vector Search**: PostgreSQL pgvector with cosine distance
-3. **LLMs**: OpenAI, Groq GPT-OSS 120B
+3. **LLMs**: OpenAI, Groq GPT-OSS 20B
 4. **Speech-to-Text**: Groq Whisper Large V3
 
 ### NLP Techniques

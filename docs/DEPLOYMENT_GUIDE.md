@@ -365,7 +365,7 @@ RETRIEVAL_MIN_SCORE=0.7
 # LLM Configuration
 LLM_PROVIDER=groq
 LLM_PROVIDER_API_KEY=[your-groq-api-key]
-LLM_MODEL_NAME=openai/gpt-oss-120b
+LLM_MODEL_NAME=openai/gpt-oss-20b
 LLM_TEMPERATURE=0.2
 LLM_MAX_TOKENS=1000
 

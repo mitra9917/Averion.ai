@@ -9,11 +9,7 @@ from app.ai.provider_utils import (
 )
 
 GROQ_BASE_URL = "https://api.groq.com/openai/v1"
-GROQ_DEFAULT_CHAT_MODEL = "llama-3.1-8b-instant"
-GROQ_FALLBACK_CHAT_MODELS = (
-    "llama-3.3-70b-versatile",
-    "meta-llama/llama-4-scout-17b-16e-instruct",
-)
+GROQ_DEFAULT_CHAT_MODEL = "openai/gpt-oss-20b"
 OPENAI_DEFAULT_CHAT_MODEL = "gpt-4o-mini"
 
 
@@ -88,38 +84,28 @@ def _call_openai_compatible_chat(prompt: str, provider: str) -> str:
 
     client = OpenAI(**client_kwargs)
 
-    candidate_models = get_chat_model_candidates(provider)
+    model_name = get_chat_model_name(provider)
 
-    for model_index, model_name in enumerate(candidate_models):
-        def operation() -> str:
-            response = client.chat.completions.create(
-                model=model_name,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=settings.llm_temperature,
-                max_tokens=settings.llm_max_tokens
+    def operation() -> str:
+        response = client.chat.completions.create(
+            model=model_name,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=settings.llm_temperature,
+            max_tokens=settings.llm_max_tokens
+        )
+        answer = response.choices[0].message.content
+        if not answer:
+            raise ProviderRequestError(
+                provider_failure_message("AI provider"),
+                provider=provider
             )
-            answer = response.choices[0].message.content
-            if not answer:
-                raise ProviderRequestError(
-                    provider_failure_message("AI provider"),
-                    provider=provider
-                )
-            return answer.strip()
+        return answer.strip()
 
-        try:
-            return run_with_retries(
-                operation,
-                provider=provider,
-                attempts=settings.llm_provider_max_retries + 1,
-                public_message=provider_failure_message("AI provider")
-            )
-        except ProviderRequestError:
-            if model_index == len(candidate_models) - 1:
-                raise
-
-    raise ProviderRequestError(
-        provider_failure_message("AI provider"),
-        provider=provider
+    return run_with_retries(
+        operation,
+        provider=provider,
+        attempts=settings.llm_provider_max_retries + 1,
+        public_message=provider_failure_message("AI provider")
     )
 
 
@@ -130,11 +116,7 @@ def get_chat_model_candidates(provider: str | None = None) -> list[str]:
     if normalized_provider != "groq":
         return [model_name]
 
-    candidates = [model_name]
-    for fallback_model in GROQ_FALLBACK_CHAT_MODELS:
-        if fallback_model not in candidates:
-            candidates.append(fallback_model)
-    return candidates
+    return [model_name]
 
 
 def get_chat_model_name(provider: str | None = None) -> str:

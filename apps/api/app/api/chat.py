@@ -1,4 +1,6 @@
+import time
 import uuid
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
@@ -24,26 +26,12 @@ from app.db.documents import DatabaseNotConfiguredError
 from app.schemas.chat import ChatCitation, ChatRequest, ChatResponse
 
 router = APIRouter(prefix="/chat", tags=["chat"])
+logger = logging.getLogger(__name__)
 
 
-def _build_provider_fallback_answer(chunks: list[dict]) -> str:
-    """Return a cited context summary when the LLM provider is unavailable."""
-    lines = [
-        "The AI provider is temporarily unavailable, but I found relevant context in your documents:"
-    ]
-
-    for index, chunk in enumerate(chunks[:3], start=1):
-        filename = chunk.get("filename") or "Document"
-        text = " ".join(str(chunk.get("text") or "").split())
-        if len(text) > 320:
-            text = f"{text[:317].rstrip()}..."
-        if text:
-            lines.append(f"[{index}] {filename}: {text}")
-
-    if len(lines) == 1:
-        return "The AI provider is temporarily unavailable. Please try again."
-
-    return "\n\n".join(lines)
+def _build_provider_fallback_answer() -> str:
+    """Return a short safe message without exposing retrieved source text."""
+    return "Sorry, I'm temporarily unavailable. Please try again in a moment."
 
 
 
@@ -83,6 +71,7 @@ async def chat(
     Raises:
         HTTPException: If there's an error processing the request
     """
+    started_at = time.perf_counter()
     try:
         # Validate question
         if not request.question or not request.question.strip():
@@ -140,6 +129,7 @@ async def chat(
             )
         
         # PHASE 2 & 3: Retrieve relevant chunks with score filtering and organization isolation
+        retrieval_started_at = time.perf_counter()
         chunks = retrieve_chunks(
             query=request.question,
             top_k=settings.retrieval_top_k,
@@ -147,6 +137,7 @@ async def chat(
             min_score=settings.retrieval_min_score
         )
         
+        retrieval_ms = (time.perf_counter() - retrieval_started_at) * 1000
         # Log retrieval for security audit
         log_security_event(
             event_type="retrieval",
@@ -187,11 +178,13 @@ async def chat(
             chunks=chunks,
             language=request.language
         )
+        prompt_ms = (time.perf_counter() - retrieval_started_at) * 1000 - retrieval_ms
         
         # Generate answer using LLM.
         # SECURITY: Only the prompt is passed to the LLM.
         # No database_url, raw records, or internal config is exposed.
         try:
+            llm_started_at = time.perf_counter()
             answer = generate_answer(prompt, chunks)
         except AIProviderError:
             log_security_event(
@@ -201,7 +194,29 @@ async def chat(
                 organization_id=context.organization_id,
                 user_id=context.user_id
             )
-            answer = _build_provider_fallback_answer(chunks)
+            answer = _build_provider_fallback_answer()
+            stored_messages = store_chat_exchange(
+                organization_id=context.organization_id,
+                user_id=context.user_id,
+                conversation_id=request.conversation_id,
+                question=request.question.strip(),
+                answer=answer,
+                citations=[]
+            )
+            logger.warning(
+                "Chat provider unavailable: retrieval_ms=%.1f prompt_ms=%.1f total_ms=%.1f",
+                retrieval_ms,
+                prompt_ms,
+                (time.perf_counter() - started_at) * 1000
+            )
+            return ChatResponse(
+                conversation_id=stored_messages.conversation_id,
+                message_id=stored_messages.assistant_message_id,
+                answer=answer,
+                citations=[],
+                sources=[]
+            )
+        llm_ms = (time.perf_counter() - llm_started_at) * 1000
         
         # PHASE 4: Output Filtering - Check for sensitive data leakage
         has_sensitive, sensitive_pattern = contains_sensitive_data(answer)
@@ -256,6 +271,14 @@ async def chat(
             question=request.question.strip(),
             answer=answer,
             citations=[citation.model_dump() for citation in citations]
+        )
+        logger.info(
+            "Chat latency: retrieval_ms=%.1f prompt_ms=%.1f llm_ms=%.1f persistence_ms=%.1f total_ms=%.1f",
+            retrieval_ms,
+            prompt_ms,
+            llm_ms,
+            (time.perf_counter() - llm_started_at) * 1000 - llm_ms,
+            (time.perf_counter() - started_at) * 1000
         )
         
         return ChatResponse(

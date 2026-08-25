@@ -3,6 +3,7 @@ import logging
 from pathlib import Path
 import re
 from tempfile import NamedTemporaryFile
+import time
 from typing import Iterator
 
 from app.ai.embeddings import generate_embeddings
@@ -95,6 +96,7 @@ def process_ingestion_job(
 ) -> None:
     document_storage = storage or get_document_storage()
 
+    started_at = time.perf_counter()
     try:
         clear_document_processing_outputs(job.document_id)
 
@@ -108,6 +110,7 @@ def process_ingestion_job(
                 file_type=job.file_type,
                 document_id=job.document_id
             )
+        extraction_and_chunking_ms = (time.perf_counter() - started_at) * 1000
 
         if not chunks:
             raise RuntimeError(
@@ -129,17 +132,33 @@ def process_ingestion_job(
             chunk["embedding_id"] = chunk["chunk_id"]
 
         chunk_records = _build_chunk_records(chunks, job.document_id)
+        database_chunks_started_at = time.perf_counter()
         create_document_chunks(chunk_records)
+        database_chunks_ms = (time.perf_counter() - database_chunks_started_at) * 1000
+        embedding_started_at = time.perf_counter()
         embedded_chunks = generate_embeddings(
             chunks,
             batch_size=settings.embedding_batch_size
         )
+        embedding_ms = (time.perf_counter() - embedding_started_at) * 1000
 
         if any("embedding" not in chunk for chunk in embedded_chunks):
             raise RuntimeError("One or more chunks could not be embedded.")
 
+        vector_storage_started_at = time.perf_counter()
         store_embeddings(embedded_chunks)
+        vector_storage_ms = (time.perf_counter() - vector_storage_started_at) * 1000
         complete_ingestion_job(job)
+        logger.info(
+            "Document ingestion latency: document_id=%s chunks=%s extraction_and_chunking_ms=%.1f database_chunks_ms=%.1f embedding_ms=%.1f vector_storage_ms=%.1f total_ms=%.1f",
+            job.document_id,
+            len(chunks),
+            extraction_and_chunking_ms,
+            database_chunks_ms,
+            embedding_ms,
+            vector_storage_ms,
+            (time.perf_counter() - started_at) * 1000
+        )
     except Exception as exc:
         error_message = sanitize_processing_error(exc)
         terminal = fail_ingestion_job(job, error_message)

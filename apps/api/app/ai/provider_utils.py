@@ -48,6 +48,24 @@ def provider_failure_message(kind: str = "AI provider") -> str:
     return f"{kind} is temporarily unavailable. Please try again."
 
 
+def is_transient_provider_error(error: Exception) -> bool:
+    """Return whether a failed request is safe to retry once."""
+    status_code = getattr(error, "status_code", None)
+    response = getattr(error, "response", None)
+    if status_code is None and response is not None:
+        status_code = getattr(response, "status_code", None)
+
+    if isinstance(status_code, int):
+        return status_code == 408 or status_code == 429 or status_code >= 500
+
+    return isinstance(error, (ConnectionError, TimeoutError)) or type(error).__name__ in {
+        "APIConnectionError",
+        "APITimeoutError",
+        "InternalServerError",
+        "RateLimitError",
+    }
+
+
 def run_with_retries(
     operation: Callable[[], T],
     *,
@@ -72,6 +90,8 @@ def run_with_retries(
                 max_attempts,
                 sanitize_provider_error(exc)
             )
+            if not is_transient_provider_error(exc):
+                break
             if attempt < max_attempts and delay_seconds > 0:
                 time.sleep(delay_seconds)
 
