@@ -107,7 +107,7 @@ Ready for Retrieval
 ### AI/ML Stack
 - **Embeddings**: sentence-transformers/all-MiniLM-L6-v2
 - **LLM Providers**: 
-  - Groq (llama-3.3-70b-versatile)
+  - Groq (openai/gpt-oss-120b)
   - OpenAI (gpt-4o-mini)
   - Mock provider for testing
 - **Document Processing**: PyPDF2, python-docx
@@ -227,7 +227,7 @@ RETRIEVAL_MIN_SCORE=0.7
 # LLM Configuration
 LLM_PROVIDER=groq
 LLM_PROVIDER_API_KEY=your-api-key-here
-LLM_MODEL_NAME=gpt-4o-mini
+LLM_MODEL_NAME=openai/gpt-oss-120b
 LLM_TEMPERATURE=0.2
 LLM_MAX_TOKENS=1000
 ```
@@ -251,7 +251,7 @@ LLM_MAX_TOKENS=1000
 - `RETRIEVAL_MIN_SCORE`: Minimum similarity score threshold (0.0-1.0, lower = more similar)
 - `LLM_PROVIDER`: LLM provider (mock/openai/groq)
 - `LLM_PROVIDER_API_KEY`: API key for OpenAI or Groq
-- `LLM_MODEL_NAME`: Model name for OpenAI
+- `LLM_MODEL_NAME`: Model name for the selected provider (for Groq: `openai/gpt-oss-120b`)
 - `LLM_TEMPERATURE`: Response randomness (0.0-1.0)
 - `LLM_MAX_TOKENS`: Maximum response length
 
