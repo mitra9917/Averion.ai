@@ -26,4 +26,4 @@ RUN mkdir -p /app/uploads /app/.cache/huggingface /app/.cache/sentence-transform
 
 EXPOSE 8000
 
-CMD sh -c 'if [ "${AVERION_PROCESS:-}" = "worker" ] || [ "${RAILWAY_SERVICE_NAME:-}" = "amiable-laughter" ] || [ "${RAILWAY_SERVICE_ID:-}" = "46b518c4-fa59-459d-a28f-22d309d856a0" ]; then python -m app.workers.document_ingestion; else uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-8000}" --timeout-graceful-shutdown 30; fi'
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port \"${PORT:-8000}\" --timeout-graceful-shutdown 30"]

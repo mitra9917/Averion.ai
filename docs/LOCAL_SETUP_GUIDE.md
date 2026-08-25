@@ -250,10 +250,10 @@ After local setup is complete:
 **Important:** The deployment configuration (Part #129) is separate from local development:
 
 - **Local**: Uses this guide for setup
-- **Railway**: Uses Dockerfile and railway.json (already configured)
+- **Render**: Uses the Render Web Service settings in `RENDER_DEPLOYMENT.md`
 - **Vercel**: Uses vercel.json and package.json (already configured)
 
-The deployment configuration I created will work on Railway and Vercel regardless of your local setup.
+The deployment configuration in `RENDER_DEPLOYMENT.md` works with Render and Vercel regardless of your local setup.
 
 ## Getting Help
 
@@ -280,6 +280,6 @@ If you encounter issues:
 5. ⏳ Test local development
 
 **Deployment Configuration (Part #129):**
-- ✅ Already complete and ready for Railway/Vercel
+- ✅ Ready for Render/Vercel after following `RENDER_DEPLOYMENT.md`
 - ✅ Will work when you push to GitHub
 - ✅ Does not depend on your local setup
