@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import time
 import uuid
@@ -31,6 +32,9 @@ class RequestSecurityMiddleware(BaseHTTPMiddleware):
         try:
             response = await call_next(request)
             status_code = response.status_code
+        except asyncio.CancelledError:
+            status_code = 499
+            raise
         except Exception:
             status_code = 500
             raise

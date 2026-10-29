@@ -6,6 +6,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import Thread
 from uuid import uuid4
 
+from app.ai.embeddings import preload_embedding_model
 from app.core.config import settings
 from app.db.ingestion_jobs import claim_next_ingestion_job
 from app.services.document_ingestion import process_ingestion_job
@@ -49,6 +50,11 @@ def build_worker_id() -> str:
 def run_worker() -> None:
     worker_id = build_worker_id()
     logger.info("Starting document ingestion worker %s", worker_id)
+    logger.info("Loading embedding model in ingestion worker (may take a minute)...")
+    if not preload_embedding_model():
+        logger.warning(
+            "Embedding model failed to load; ingestion jobs will retry until it succeeds."
+        )
 
     while True:
         try:
