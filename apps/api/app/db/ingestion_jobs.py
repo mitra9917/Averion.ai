@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import psycopg
 
 from app.core.config import settings
-from app.db.connection import is_database_configured
+from app.db.connection import is_database_configured, open_connection
 from app.db.documents import (
     DatabaseNotConfiguredError,
     DocumentMetadataCreate
@@ -26,7 +26,7 @@ def create_document_and_job(metadata: DocumentMetadataCreate) -> str:
     if not is_database_configured():
         raise DatabaseNotConfiguredError("DATABASE_URL is not configured.")
 
-    with psycopg.connect(settings.database_url, connect_timeout=5) as connection:
+    with open_connection() as connection:
         with connection.cursor() as cursor:
             if metadata.organization_id == settings.default_organization_id:
                 cursor.execute(
@@ -88,7 +88,7 @@ def claim_next_ingestion_job(worker_id: str) -> DocumentIngestionJob | None:
     if not is_database_configured():
         raise DatabaseNotConfiguredError("DATABASE_URL is not configured.")
 
-    with psycopg.connect(settings.database_url, connect_timeout=5) as connection:
+    with open_connection() as connection:
         with connection.cursor() as cursor:
             cursor.execute(
                 """
@@ -199,7 +199,7 @@ def claim_ingestion_job(
     if not is_database_configured():
         raise DatabaseNotConfiguredError("DATABASE_URL is not configured.")
 
-    with psycopg.connect(settings.database_url, connect_timeout=5) as connection:
+    with open_connection() as connection:
         with connection.cursor() as cursor:
             cursor.execute(
                 """
@@ -262,7 +262,7 @@ def clear_document_processing_outputs(document_id: str) -> None:
     if not is_database_configured():
         raise DatabaseNotConfiguredError("DATABASE_URL is not configured.")
 
-    with psycopg.connect(settings.database_url, connect_timeout=5) as connection:
+    with open_connection() as connection:
         with connection.cursor() as cursor:
             cursor.execute(
                 "delete from document_embeddings where document_id = %s::uuid",
@@ -278,7 +278,7 @@ def complete_ingestion_job(job: DocumentIngestionJob) -> None:
     if not is_database_configured():
         raise DatabaseNotConfiguredError("DATABASE_URL is not configured.")
 
-    with psycopg.connect(settings.database_url, connect_timeout=5) as connection:
+    with open_connection() as connection:
         with connection.cursor() as cursor:
             cursor.execute(
                 """
@@ -315,7 +315,7 @@ def fail_ingestion_job(job: DocumentIngestionJob, error_message: str) -> bool:
     job_status = "failed" if terminal_failure else "queued"
     document_status = "failed" if terminal_failure else "uploaded"
 
-    with psycopg.connect(settings.database_url, connect_timeout=5) as connection:
+    with open_connection() as connection:
         with connection.cursor() as cursor:
             cursor.execute(
                 """
@@ -366,7 +366,7 @@ def retry_failed_ingestion_job(
     if not is_database_configured():
         raise DatabaseNotConfiguredError("DATABASE_URL is not configured.")
 
-    with psycopg.connect(settings.database_url, connect_timeout=5) as connection:
+    with open_connection() as connection:
         with connection.cursor() as cursor:
             cursor.execute(
                 """

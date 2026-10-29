@@ -1,7 +1,9 @@
 import logging
+import os
 import signal
 import sys
 from contextlib import asynccontextmanager
+from threading import Thread
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -38,6 +40,20 @@ async def lifespan(app: FastAPI):
     if settings.embedding_model_preload:
         logger.info("Preloading embedding model...")
         preload_embedding_model()
+
+    if (
+        settings.enable_document_ingestion_daemon
+        and settings.inline_document_ingestion
+        and os.getenv("AVERION_PROCESS", "api") != "worker"
+    ):
+        from app.workers.document_ingestion import run_worker
+
+        Thread(
+            target=run_worker,
+            name="document-ingestion-daemon",
+            daemon=True
+        ).start()
+        logger.info("Background document ingestion daemon started")
     
     logger.info("API startup complete")
     yield

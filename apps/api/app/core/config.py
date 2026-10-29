@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     service_name: str = "averion-api"
     database_url: str | None = None
+    database_connect_timeout: int = 30
     default_organization_id: str = "00000000-0000-0000-0000-000000000001"
     supabase_url: str | None = None
     supabase_jwt_secret: str | None = None
@@ -59,6 +60,8 @@ class Settings(BaseSettings):
     # When false, upload only queues a job; a separate worker must run
     # `python -m app.workers.document_ingestion` (required in production).
     inline_document_ingestion: bool = True
+    # Poll the ingestion queue on the API process (required on free Render without a worker).
+    enable_document_ingestion_daemon: bool = True
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

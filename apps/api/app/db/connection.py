@@ -15,6 +15,13 @@ def is_database_configured() -> bool:
     return bool(settings.database_url and settings.database_url.strip())
 
 
+def open_connection():
+    return psycopg.connect(
+        settings.database_url,
+        connect_timeout=settings.database_connect_timeout
+    )
+
+
 def check_database_connection() -> DatabaseConnectionCheck:
     if not is_database_configured():
         return DatabaseConnectionCheck(
@@ -23,7 +30,7 @@ def check_database_connection() -> DatabaseConnectionCheck:
         )
 
     try:
-        with psycopg.connect(settings.database_url, connect_timeout=5) as connection:
+        with open_connection() as connection:
             with connection.cursor() as cursor:
                 cursor.execute("select 1")
                 cursor.fetchone()

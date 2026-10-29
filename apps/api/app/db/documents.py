@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import psycopg
 
 from app.core.config import settings
-from app.db.connection import is_database_configured
+from app.db.connection import is_database_configured, open_connection
 
 
 @dataclass(frozen=True)
@@ -55,7 +55,7 @@ def create_document_metadata(metadata: DocumentMetadataCreate) -> None:
     if not is_database_configured():
         raise DatabaseNotConfiguredError("DATABASE_URL is not configured.")
 
-    with psycopg.connect(settings.database_url, connect_timeout=5) as connection:
+    with open_connection() as connection:
         with connection.cursor() as cursor:
             if metadata.organization_id == settings.default_organization_id:
                 cursor.execute(
@@ -102,7 +102,7 @@ def create_document_chunks(chunks: list[DocumentChunkCreate]) -> int:
     if not is_database_configured():
         raise DatabaseNotConfiguredError("DATABASE_URL is not configured.")
 
-    with psycopg.connect(settings.database_url, connect_timeout=5) as connection:
+    with open_connection() as connection:
         with connection.cursor() as cursor:
             cursor.executemany(
                 """
@@ -141,7 +141,7 @@ def update_document_status(document_id: str, status: str, error_message: str | N
     if not is_database_configured():
         raise DatabaseNotConfiguredError("DATABASE_URL is not configured.")
 
-    with psycopg.connect(settings.database_url, connect_timeout=5) as connection:
+    with open_connection() as connection:
         with connection.cursor() as cursor:
             cursor.execute(
                 """
@@ -159,7 +159,7 @@ def list_documents(organization_id: str) -> list[DocumentListRecord]:
     if not is_database_configured():
         raise DatabaseNotConfiguredError("DATABASE_URL is not configured.")
 
-    with psycopg.connect(settings.database_url, connect_timeout=5) as connection:
+    with open_connection() as connection:
         with connection.cursor() as cursor:
             cursor.execute(
                 """
@@ -206,7 +206,7 @@ def get_document_for_organization(
     if not is_database_configured():
         raise DatabaseNotConfiguredError("DATABASE_URL is not configured.")
 
-    with psycopg.connect(settings.database_url, connect_timeout=5) as connection:
+    with open_connection() as connection:
         with connection.cursor() as cursor:
             cursor.execute(
                 """
@@ -233,7 +233,7 @@ def delete_document(document_id: str, organization_id: str) -> DeletedDocumentRe
     if not is_database_configured():
         raise DatabaseNotConfiguredError("DATABASE_URL is not configured.")
 
-    with psycopg.connect(settings.database_url, connect_timeout=5) as connection:
+    with open_connection() as connection:
         with connection.cursor() as cursor:
             cursor.execute(
                 """

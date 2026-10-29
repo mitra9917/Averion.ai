@@ -15,6 +15,10 @@ services:
         value: "3.12.8"
       - key: INLINE_DOCUMENT_INGESTION
         value: "true"
+      - key: ENABLE_DOCUMENT_INGESTION_DAEMON
+        value: "true"
+      - key: DATABASE_CONNECT_TIMEOUT
+        value: "30"
       - key: DOCUMENT_STORAGE_BACKEND
         value: supabase
       - key: SUPABASE_STORAGE_BUCKET
