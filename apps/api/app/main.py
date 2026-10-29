@@ -70,14 +70,16 @@ def create_app() -> FastAPI:
         lifespan=lifespan
     )
 
+    app.add_middleware(RequestSecurityMiddleware)
+    # Outermost: CORS must run first so preflight still succeeds during cold starts/errors.
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.allowed_cors_origins,
         allow_credentials=True,
         allow_methods=["*"],
-        allow_headers=["*"]
+        allow_headers=["*"],
+        expose_headers=["X-Request-ID"],
     )
-    app.add_middleware(RequestSecurityMiddleware)
 
     app.include_router(health_router)
     app.include_router(documents_router)

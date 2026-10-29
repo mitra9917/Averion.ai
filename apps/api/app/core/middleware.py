@@ -27,9 +27,13 @@ class RequestSecurityMiddleware(BaseHTTPMiddleware):
         started_at = time.perf_counter()
         status_code = 500
 
+        response: Response | None = None
         try:
             response = await call_next(request)
             status_code = response.status_code
+        except Exception:
+            status_code = 500
+            raise
         finally:
             duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
             if settings.request_logging_enabled:
@@ -43,6 +47,9 @@ class RequestSecurityMiddleware(BaseHTTPMiddleware):
                         "duration_ms": duration_ms,
                     },
                 )
+
+        if response is None:
+            raise RuntimeError("Request handler did not return a response")
 
         response.headers["X-Request-ID"] = request_id
 
