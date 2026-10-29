@@ -13,6 +13,7 @@ from fastapi import (
 )
 
 from app.core.auth import RequestContext, get_request_context
+from app.core.config import settings
 from app.core.organization import get_current_organization_id
 from app.db.documents import (
     DatabaseNotConfiguredError,
@@ -108,16 +109,17 @@ async def upload_document(
             organization_id=context.organization_id,
             uploaded_by_user_id=context.user_id
         )
-        if response.metadata_stored:
+        if response.metadata_stored and settings.inline_document_ingestion:
             background_tasks.add_task(
                 process_uploaded_document,
                 response.document_id,
                 context.organization_id
             )
         logger.info(
-            "Document upload queued: document_id=%s metadata_stored=%s request_ms=%.1f",
+            "Document upload queued: document_id=%s metadata_stored=%s inline=%s request_ms=%.1f",
             response.document_id,
             response.metadata_stored,
+            settings.inline_document_ingestion,
             (time.perf_counter() - started_at) * 1000
         )
         return response

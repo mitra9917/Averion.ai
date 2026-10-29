@@ -56,6 +56,9 @@ class Settings(BaseSettings):
     transcription_max_retries: int = 2
     # Avoid loading PyTorch and the embedding model before the web server binds.
     embedding_model_preload: bool = False
+    # When false, upload only queues a job; a separate worker must run
+    # `python -m app.workers.document_ingestion` (required in production).
+    inline_document_ingestion: bool = True
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

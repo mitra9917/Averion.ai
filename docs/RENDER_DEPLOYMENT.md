@@ -152,3 +152,15 @@ Use UptimeRobot's Free-plan five-minute interval. It monitors the service and ca
 | Authentication or document upload fails | Verify the Supabase URL, JWT secret, service-role key, database URL, private bucket, and production migrations. |
 | UptimeRobot reports DOWN | Open the same `/health` URL in a browser, then review Render logs and the monitor URL for a typo. |
 | Python/dependency error | Render should use Python 3.12 from `apps/api/.python-version`; do not install development dependencies for the web service. |
+| Document stuck at **processing** | Deploy the **background worker** from root `render.yaml`, set `INLINE_DOCUMENT_INGESTION=false` on the API, use `DOCUMENT_STORAGE_BACKEND=supabase`, and give the worker **2 GB+ RAM**. |
+
+## 9. Blueprint: API + document worker (recommended)
+
+For reliable document indexing, use the root **`render.yaml`** Blueprint (two services):
+
+1. Render → **New** → **Blueprint** → connect `Averion.ai` on GitHub.
+2. Apply the blueprint, then fill secret env vars on **both** `averion-api` and `averion-document-worker`.
+3. API: `AVERION_PROCESS=api`, `INLINE_DOCUMENT_INGESTION=false`.
+4. Worker: `AVERION_PROCESS=worker`, `EMBEDDING_MODEL_PRELOAD=true`, plan **Standard (2 GB)** or larger.
+
+Docker alternative: same `apps/api/Dockerfile` on a **Web Service** and a **Background Worker**; the Dockerfile switches on `AVERION_PROCESS`.
