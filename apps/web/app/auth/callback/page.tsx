@@ -64,13 +64,13 @@ export default function AuthCallbackPage() {
   }, [router]);
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-950 px-4 text-white">
-      <section className="w-full max-w-md rounded-lg border border-white/10 bg-white p-8 text-slate-950 shadow-2xl">
-        <p className="text-sm font-medium text-blue-700">Auth callback</p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-normal">Almost there</h1>
-        <p className="mt-3 text-sm leading-6 text-slate-600">{message}</p>
+    <main className="flex min-h-dvh items-center justify-center bg-canvas px-4 text-ink">
+      <section className="w-full max-w-md rounded-pane border border-hairline bg-surface p-8 shadow-float">
+        <p className="micro">Auth callback</p>
+        <h1 className="mt-3 text-2xl tracking-[-0.02em]">Almost there</h1>
+        <p className="mt-3 text-sm leading-6 text-muted">{message}</p>
         <Link
-          className="mt-6 inline-flex rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
+          className="mt-6 inline-flex h-10 items-center rounded-full bg-ink px-4 text-sm font-semibold text-white"
           href="/login"
         >
           Go to sign in

@@ -1,593 +1,591 @@
 "use client";
 
-import {
-  AlertTriangle,
-  ArrowUpRight,
-  Bot,
-  CheckCircle2,
-  CircleAlert,
-  Database,
-  FileText,
-  FileType2,
-  MessageSquare,
-  RefreshCw,
-  ThumbsUp,
-  Upload,
-  UploadCloud
-} from "lucide-react";
+import { ArrowUp, FileText, RefreshCw, Sparkles } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
+import { CorpusMap } from "@/components/corpus-map";
+import { IndexingChart } from "@/components/indexing-chart";
+import { Skeleton } from "@/components/skeleton";
+import { useWorkspace } from "@/components/workspace-context";
 import {
-  type ConversationSummary,
-  type DocumentListItem,
+  getConversation,
   listConversations,
-  listDocuments
+  listDocuments,
+  type ConversationSummary,
+  type DocumentListItem
 } from "@/lib/api";
+import {
+  activityFeed,
+  attentionItems,
+  buildChunkSeries,
+  buildCorpusMap,
+  collapseSeries,
+  CONVERSATION_GROUPS,
+  firstName,
+  flowDelta,
+  formatLongDate,
+  formatNumber,
+  formatRelative,
+  formatSignedPercent,
+  greetingFor,
+  seriesTotal,
+  sortByUpdated,
+  statusKind,
+  type RangeKey
+} from "@/lib/meridian";
 
-type DashboardData = {
-  documents: DocumentListItem[];
-  conversations: ConversationSummary[];
-};
+type OverviewRange = Extract<RangeKey, "24h" | "14d" | "90d">;
 
-const emptyDashboardData: DashboardData = {
-  documents: [],
-  conversations: []
-};
-
-const statusStyles: Record<string, string> = {
-  ready: "bg-emerald-400/10 text-emerald-400",
-  processing: "bg-blue-500/10 text-blue-400",
-  pending: "bg-amber-400/10 text-amber-300",
-  failed: "bg-red-500/10 text-red-400"
-};
-
-function formatCompactNumber(value: number) {
-  return new Intl.NumberFormat("en", {
-    notation: value >= 1000 ? "compact" : "standard",
-    maximumFractionDigits: 1
-  }).format(value);
-}
-
-function formatRelativeDate(dateValue: string) {
-  const date = new Date(dateValue);
-  const difference = Date.now() - date.getTime();
-  const minutes = Math.floor(difference / 60_000);
-
-  if (minutes < 1) return "Just now";
-  if (minutes < 60) return `${minutes} min${minutes === 1 ? "" : "s"} ago`;
-
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
-
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days} day${days === 1 ? "" : "s"} ago`;
-
-  return new Intl.DateTimeFormat("en", {
-    month: "short",
-    day: "numeric"
-  }).format(date);
-}
-
-function getWeeklyDocumentCounts(documents: DocumentListItem[]) {
-  const now = new Date();
-  const counts = [0, 0, 0, 0];
-
-  for (const document of documents) {
-    const ageInDays =
-      (now.getTime() - new Date(document.created_at).getTime()) / 86_400_000;
-
-    if (ageInDays >= 0 && ageInDays < 28) {
-      const weekFromNow = Math.min(3, Math.floor(ageInDays / 7));
-      counts[3 - weekFromNow] += 1;
-    }
-  }
-
-  return counts;
-}
-
-function buildChartPaths(counts: number[]) {
-  const width = 600;
-  const height = 190;
-  const maximum = Math.max(...counts, 1);
-  const points = counts.map((count, index) => ({
-    x: (index / (counts.length - 1)) * width,
-    y: height - (count / maximum) * (height - 24)
-  }));
-  const line = points
-    .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
-    .join(" ");
-  const area = `${line} L ${width} ${height} L 0 ${height} Z`;
-
-  return { area, line };
-}
+const ranges: { id: OverviewRange; label: string; days: number }[] = [
+  { id: "24h", label: "24h", days: 1 },
+  { id: "14d", label: "14d", days: 14 },
+  { id: "90d", label: "90d", days: 90 }
+];
 
 export function DashboardOverview() {
-  const [data, setData] = useState<DashboardData>(emptyDashboardData);
+  const router = useRouter();
+  const workspace = useWorkspace();
+  const [documents, setDocuments] = useState<DocumentListItem[]>([]);
+  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  const loadDashboard = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-
-    const [documentsResult, conversationsResult] = await Promise.allSettled([
-      listDocuments(),
-      listConversations()
-    ]);
-
-    const documents =
-      documentsResult.status === "fulfilled" ? documentsResult.value : [];
-    const conversations =
-      conversationsResult.status === "fulfilled"
-        ? conversationsResult.value.conversations
-        : [];
-
-    setData({ documents, conversations });
-
-    if (
-      documentsResult.status === "rejected" &&
-      conversationsResult.status === "rejected"
-    ) {
-      setError("Dashboard data could not be loaded. Confirm the API is running.");
-    } else if (
-      documentsResult.status === "rejected" ||
-      conversationsResult.status === "rejected"
-    ) {
-      setError("Some dashboard data is temporarily unavailable.");
-    }
-
-    setIsLoading(false);
-  }, []);
+  const [question, setQuestion] = useState("");
+  const [range, setRange] = useState<OverviewRange>("14d");
+  const [brushOverride, setBrushOverride] = useState<[number, number] | null>(null);
+  const [resume, setResume] = useState<{
+    id: string;
+    title: string;
+    quote: string;
+    page: number | null;
+    updatedAt: string;
+  } | null>(null);
 
   useEffect(() => {
-    const timeout = window.setTimeout(() => {
-      void loadDashboard();
-    }, 0);
+    let ignore = false;
 
-    return () => window.clearTimeout(timeout);
-  }, [loadDashboard]);
+    async function load() {
+      setIsLoading(true);
+      setError(null);
+      const [documentsResult, conversationsResult] = await Promise.allSettled([
+        listDocuments(),
+        listConversations()
+      ]);
 
-  const dashboard = useMemo(() => {
-    const totalDocuments = data.documents.length;
-    const readyDocuments = data.documents.filter(
-      (document) => document.status.toLowerCase() === "ready"
-    ).length;
-    const failedDocuments = data.documents.filter(
-      (document) => document.status.toLowerCase() === "failed"
-    ).length;
-    const processingDocuments = totalDocuments - readyDocuments - failedDocuments;
-    const totalChunks = data.documents.reduce(
-      (sum, document) => sum + document.chunks_count,
-      0
-    );
-    const readinessRate =
-      totalDocuments === 0 ? 0 : Math.round((readyDocuments / totalDocuments) * 100);
-    const recentDocuments = [...data.documents]
-      .sort(
-        (left, right) =>
-          new Date(right.updated_at).getTime() -
-          new Date(left.updated_at).getTime()
-      )
-      .slice(0, 5);
-    const weeklyCounts = getWeeklyDocumentCounts(data.documents);
+      if (ignore) return;
 
-    return {
-      totalDocuments,
-      readyDocuments,
-      failedDocuments,
-      processingDocuments,
-      totalChunks,
-      readinessRate,
-      recentDocuments,
-      weeklyCounts,
-      chartPaths: buildChartPaths(weeklyCounts)
-    };
-  }, [data.documents]);
+      const nextDocuments =
+        documentsResult.status === "fulfilled" ? documentsResult.value : [];
+      const nextConversations =
+        conversationsResult.status === "fulfilled"
+          ? conversationsResult.value.conversations
+          : [];
 
-  const activity = useMemo(() => {
-    const documentActivity = data.documents.slice(0, 4).map((document) => ({
-      id: `document-${document.document_id}`,
-      timestamp: document.updated_at,
-      kind: document.status.toLowerCase() === "failed" ? "error" : "document",
-      title:
-        document.status.toLowerCase() === "failed"
-          ? `Processing needs attention for ${document.filename}.`
-          : `${document.filename} is ${document.status.toLowerCase()}.`
-    }));
-    const conversationActivity = data.conversations.slice(0, 3).map((conversation) => ({
-      id: `conversation-${conversation.id}`,
-      timestamp: conversation.updated_at,
-      kind: "conversation",
-      title: `Conversation updated: ${conversation.title}`
-    }));
+      setDocuments(nextDocuments);
+      setConversations(sortByUpdated(nextConversations));
 
-    return [...documentActivity, ...conversationActivity]
-      .sort(
-        (left, right) =>
-          new Date(right.timestamp).getTime() -
-          new Date(left.timestamp).getTime()
-      )
-      .slice(0, 4);
-  }, [data]);
+      if (
+        documentsResult.status === "rejected" &&
+        conversationsResult.status === "rejected"
+      ) {
+        setError("Overview could not be loaded. Confirm the API is running.");
+      } else if (
+        documentsResult.status === "rejected" ||
+        conversationsResult.status === "rejected"
+      ) {
+        setError("Some overview data is temporarily unavailable.");
+      }
 
-  const metrics = [
-    {
-      label: "Total Documents",
-      value: dashboard.totalDocuments,
-      icon: FileText,
-      detail: "Organization files",
-      tone: "default"
-    },
-    {
-      label: "Ready",
-      value: dashboard.readyDocuments,
-      icon: CheckCircle2,
-      detail: `${dashboard.readinessRate}% success rate`,
-      tone: "success"
-    },
-    {
-      label: "Failed",
-      value: dashboard.failedDocuments,
-      icon: CircleAlert,
-      detail: "Requires attention",
-      tone: "danger"
-    },
-    {
-      label: "Total Chunks",
-      value: dashboard.totalChunks,
-      icon: Database,
-      detail: "Indexed segments",
-      tone: "default"
-    },
-    {
-      label: "Conversations",
-      value: data.conversations.length,
-      icon: MessageSquare,
-      detail: "Saved chat sessions",
-      tone: "default"
+      setIsLoading(false);
     }
-  ] as const;
+
+    void load();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  const latest = conversations[0];
+
+  useEffect(() => {
+    if (!latest) {
+      return;
+    }
+
+    let ignore = false;
+
+    getConversation(latest.id)
+      .then((response) => {
+        if (ignore) return;
+        const messages = response.conversation.messages;
+        const lastUser = [...messages].reverse().find((message) => message.role === "user");
+        const lastAssistant = [...messages]
+          .reverse()
+          .find((message) => message.role === "assistant");
+        const page =
+          lastAssistant?.citations.find((citation) => citation.page_number)?.page_number ??
+          null;
+
+        setResume({
+          id: response.conversation.id,
+          title: response.conversation.title,
+          quote: lastUser?.content || response.conversation.title,
+          page,
+          updatedAt: response.conversation.updated_at
+        });
+      })
+      .catch(() => {
+        if (ignore) return;
+        setResume({
+          id: latest.id,
+          title: latest.title,
+          quote: latest.title,
+          page: null,
+          updatedAt: latest.updated_at
+        });
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [latest]);
+
+  const series = useMemo(
+    () => collapseSeries(buildChunkSeries(documents, range)),
+    [documents, range]
+  );
+
+  const defaultBrush = useMemo<[number, number]>(
+    () => [0, Math.max(0, series.points.length - 1)],
+    [range, series.points.length]
+  );
+  const brush = brushOverride ?? defaultBrush;
+
+  const ready = documents.filter((document) => statusKind(document.status) === "ready").length;
+  const failed = documents.filter((document) => statusKind(document.status) === "failed").length;
+  const processing = documents.filter(
+    (document) => statusKind(document.status) === "processing"
+  ).length;
+  const chunks = documents.reduce((sum, document) => sum + document.chunks_count, 0);
+  const needsLook = failed + processing;
+  const totalChunks = seriesTotal(series.points);
+  const documentsInRange = series.points.reduce((sum, point) => sum + point.documents, 0);
+  const activeRange = ranges.find((item) => item.id === range) ?? ranges[1];
+  const delta = flowDelta(documents, activeRange.days);
+  const average = range === "24h" ? totalChunks / 24 : totalChunks / activeRange.days;
+  const brushPoints = series.points.slice(brush[0], brush[1] + 1);
+  const brushTotal = seriesTotal(brushPoints);
+  const brushNarrowed = brush[1] - brush[0] < series.points.length - 1;
+  const attention = attentionItems(documents);
+  const activity = activityFeed(documents, conversations);
+  const recent = conversations.slice(0, 3);
+  const suggestions = documents
+    .filter((document) => statusKind(document.status) === "ready")
+    .slice(0, 2);
+  const map = buildCorpusMap(documents);
+  const now = new Date();
+  const name = firstName(workspace.userName);
+  const greeting = name ? `${greetingFor(now)}, ${name}` : greetingFor(now);
+
+  function ask(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmed = question.trim();
+
+    if (!trimmed) return;
+
+    const params = new URLSearchParams({ q: trimmed, t: crypto.randomUUID() });
+    router.push(`/chat?${params.toString()}`);
+  }
+
+  function askAbout(filename: string) {
+    const params = new URLSearchParams({
+      q: `What should I know about ${filename}?`,
+      t: crypto.randomUUID()
+    });
+    router.push(`/chat?${params.toString()}`);
+  }
+
+  if (isLoading) {
+    return (
+      <div className="grid gap-3 px-3 pt-1 pb-24 xl:h-[calc(100dvh-3.5rem)] xl:grid-cols-[360px_minmax(0,1fr)_300px]">
+        <Skeleton className="min-h-80 rounded-pane" />
+        <Skeleton className="min-h-80 rounded-pane" />
+        <Skeleton className="min-h-80 rounded-pane" />
+      </div>
+    );
+  }
 
   return (
-    <div className="mx-auto max-w-[1440px] space-y-6">
-      <header className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
-        <div>
-          <h1 className="font-serif text-3xl font-semibold tracking-normal text-zinc-100">
-            System Overview
-          </h1>
-          <p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-400">
-            Monitor the state of your organizational knowledge base and AI
-            performance.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-3">
-          <Link
-            className="inline-flex h-10 items-center gap-2 rounded-md border border-zinc-700 px-4 text-xs font-semibold text-zinc-200 transition hover:border-blue-500/50 hover:bg-white/[0.04]"
-            href="/documents"
-          >
-            <Upload aria-hidden="true" size={16} />
-            Upload Document
-          </Link>
-          <Link
-            className="inline-flex h-10 items-center gap-2 rounded-md bg-blue-500 px-4 text-xs font-semibold text-white shadow-lg shadow-blue-500/15 transition hover:bg-blue-600"
-            href="/chat"
-          >
-            <MessageSquare aria-hidden="true" size={16} />
-            Ask a Question
-          </Link>
-        </div>
-      </header>
-
-      {error && (
-        <div className="flex items-center justify-between gap-4 rounded-md border border-amber-400/20 bg-amber-400/[0.06] px-4 py-3 text-sm text-amber-200">
+    <div className="flex h-auto flex-col gap-3 px-3 pt-1 pb-24 xl:h-[calc(100dvh-3.5rem)]">
+      {error ? (
+        <div className="flex items-center justify-between gap-3 rounded-pane border border-hairline bg-surface px-4 py-3 text-sm">
           <span>{error}</span>
           <button
-            className="inline-flex items-center gap-2 text-xs font-semibold text-amber-100 transition hover:text-white"
-            onClick={() => void loadDashboard()}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold"
+            onClick={() => window.location.reload()}
             type="button"
           >
-            <RefreshCw size={14} />
+            <RefreshCw size={13} />
             Retry
           </button>
         </div>
-      )}
-
-      <section
-        aria-label="Knowledge metrics"
-        className="grid grid-cols-2 gap-4 lg:grid-cols-5"
-      >
-        {metrics.map(({ detail, icon: Icon, label, tone, value }) => (
-          <article
-            className="flex min-h-28 flex-col justify-between rounded-lg border border-white/[0.08] bg-[#1a1a1a] p-4 transition hover:bg-[#202020]"
-            key={label}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">
-                {label}
-              </span>
-              <Icon
-                className={
-                  tone === "success"
-                    ? "text-emerald-400"
-                    : tone === "danger"
-                      ? "text-red-400"
-                      : "text-zinc-500"
-                }
-                size={15}
-              />
-            </div>
-            <div>
-              <strong
-                className={`block font-serif text-2xl font-semibold ${
-                  tone === "danger" ? "text-red-400" : "text-zinc-100"
-                }`}
-              >
-                {isLoading ? "—" : formatCompactNumber(value)}
-              </strong>
-              <span
-                className={`mt-1 flex items-center gap-1 text-xs ${
-                  tone === "success"
-                    ? "text-emerald-400"
-                    : "text-zinc-400"
-                }`}
-              >
-                {tone === "success" && <ArrowUpRight size={13} />}
-                {detail}
-              </span>
-            </div>
-          </article>
-        ))}
-      </section>
-
-      <section className="grid gap-6 lg:grid-cols-3">
-        <article className="min-h-[340px] rounded-lg border border-white/[0.08] bg-[#1a1a1a] p-6 lg:col-span-2">
-          <div className="flex items-center justify-between gap-4">
-            <h2 className="font-serif text-xl font-semibold text-zinc-100">
-              Recent Knowledge Growth
-            </h2>
-            <span className="rounded-md border border-white/10 bg-zinc-900 px-3 py-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-zinc-400">
-              Last 30 Days
-            </span>
-          </div>
-
-          <div className="mt-6 h-[220px]">
-            <div className="relative h-[190px] border-b border-l border-white/10">
-              <div className="absolute inset-0 flex flex-col justify-between">
-                {[0, 1, 2, 3].map((line) => (
-                  <span className="h-px w-full bg-white/[0.05]" key={line} />
-                ))}
-              </div>
-              <svg
-                aria-label="Documents added across the last four weeks"
-                className="absolute inset-0 size-full overflow-visible"
-                preserveAspectRatio="none"
-                role="img"
-                viewBox="0 0 600 190"
-              >
-                <defs>
-                  <linearGradient id="dashboard-chart-fill" x1="0" x2="0" y1="0" y2="1">
-                    <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.24" />
-                    <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
-                  </linearGradient>
-                </defs>
-                <path d={dashboard.chartPaths.area} fill="url(#dashboard-chart-fill)" />
-                <path
-                  d={dashboard.chartPaths.line}
-                  fill="none"
-                  stroke="#3b82f6"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  vectorEffect="non-scaling-stroke"
-                />
-              </svg>
-            </div>
-            <div className="mt-2 flex justify-between font-mono text-[10px] font-semibold uppercase tracking-[0.06em] text-zinc-500">
-              <span>Week 1</span>
-              <span>Week 2</span>
-              <span>Week 3</span>
-              <span>Week 4</span>
-            </div>
-          </div>
-        </article>
-
-        <article className="flex min-h-[340px] flex-col rounded-lg border border-white/[0.08] bg-[#1a1a1a] p-6">
-          <h2 className="font-serif text-xl font-semibold text-zinc-100">
-            Knowledge Health &amp; Feedback
-          </h2>
-          <div className="mt-7 flex items-end gap-2">
-            <strong className="font-serif text-4xl font-semibold leading-none text-emerald-400">
-              {dashboard.readinessRate}%
-            </strong>
-            <span className="pb-1 text-xs text-zinc-400">Readiness score</span>
-          </div>
-
-          <div className="mt-8 flex-1 space-y-5">
-            {[
-              {
-                label: "Ready Documents",
-                value: dashboard.readyDocuments,
-                width: dashboard.readinessRate,
-                color: "bg-emerald-400"
-              },
-              {
-                label: "Processing",
-                value: dashboard.processingDocuments,
-                width:
-                  dashboard.totalDocuments === 0
-                    ? 0
-                    : Math.round(
-                        (dashboard.processingDocuments /
-                          dashboard.totalDocuments) *
-                          100
-                      ),
-                color: "bg-amber-300"
-              },
-              {
-                label: "Needs Attention",
-                value: dashboard.failedDocuments,
-                width:
-                  dashboard.totalDocuments === 0
-                    ? 0
-                    : Math.round(
-                        (dashboard.failedDocuments / dashboard.totalDocuments) * 100
-                      ),
-                color: "bg-red-500"
-              }
-            ].map((item) => (
-              <div key={item.label}>
-                <div className="mb-1.5 flex justify-between font-mono text-[10px] font-semibold uppercase tracking-[0.06em] text-zinc-300">
-                  <span>{item.label}</span>
-                  <span className="text-zinc-400">{item.value}</span>
-                </div>
-                <div className="h-1.5 overflow-hidden rounded-full bg-zinc-800">
-                  <div
-                    className={`h-full rounded-full ${item.color}`}
-                    style={{ width: `${Math.max(item.width, item.value > 0 ? 3 : 0)}%` }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <Link
-            className="mt-5 inline-flex h-9 items-center justify-center rounded-md border border-white/10 text-xs font-semibold text-zinc-200 transition hover:border-blue-500/40 hover:bg-white/[0.04]"
-            href="/documents"
-          >
-            View Detailed Report
-          </Link>
-        </article>
-      </section>
-
-      <section className="grid gap-6 lg:grid-cols-2">
-        <article className="overflow-hidden rounded-lg border border-white/[0.08] bg-[#1a1a1a]">
-          <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-4">
-            <h2 className="font-serif text-lg font-semibold text-zinc-100">
-              Recent Documents
-            </h2>
-            <Link
-              className="font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-blue-400 transition hover:text-blue-300"
-              href="/documents"
+      ) : null}
+      <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[360px_minmax(0,1fr)_300px]">
+        <section className="flex min-h-[680px] flex-col overflow-hidden rounded-pane border border-hairline bg-surface xl:min-h-0">
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-5">
+            <p className="micro">Today</p>
+            <h1 className="display mt-4">{greeting}</h1>
+            <p className="mt-2 text-sm text-muted">
+              {formatLongDate(now)}
+              {" · "}
+              {documents.length === 0
+                ? "No documents in this workspace yet"
+                : needsLook === 0
+                  ? "Everything indexed is ready to cite"
+                  : `${formatNumber(needsLook)} document${needsLook === 1 ? "" : "s"} need a look`}
+            </p>
+            <form
+              className="mt-5 flex items-center gap-2 rounded-control border border-hairline bg-surface px-2.5 focus-within:border-ink"
+              onSubmit={ask}
             >
-              View All
-            </Link>
-          </div>
+              <Sparkles aria-hidden="true" className="text-muted" size={15} />
+              <input
+                aria-label="Ask across the workspace"
+                className="h-11 min-w-0 flex-1 bg-transparent text-sm outline-none"
+                onChange={(event) => setQuestion(event.target.value)}
+                placeholder={
+                  documents.length
+                    ? `Ask across ${formatNumber(documents.length)} documents…`
+                    : "Ask a question…"
+                }
+                value={question}
+              />
+              <button
+                aria-label="Ask"
+                className="flex size-8 items-center justify-center rounded-full bg-ink text-white hover:bg-ink/90 disabled:opacity-40"
+                disabled={!question.trim()}
+                type="submit"
+              >
+                <ArrowUp size={15} />
+              </button>
+            </form>
+            <p className="mt-2 flex items-center justify-between text-xs text-muted">
+              <span className="truncate">Grounded in {workspace.orgName}</span>
+              <span>Enter to ask</span>
+            </p>
 
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[540px] text-left">
-              <thead>
-                <tr className="font-mono text-[10px] uppercase tracking-[0.08em] text-slate-400">
-                  <th className="px-4 py-3 font-semibold">Filename</th>
-                  <th className="px-4 py-3 font-semibold">Format</th>
-                  <th className="px-4 py-3 font-semibold">Status</th>
-                  <th className="px-4 py-3 text-right font-semibold">Chunks</th>
-                </tr>
-              </thead>
-              <tbody className="text-xs">
-                {dashboard.recentDocuments.map((document) => (
-                  <tr
-                    className="border-t border-white/[0.05] transition hover:bg-zinc-900/70"
-                    key={document.document_id}
-                  >
-                    <td className="max-w-72 px-4 py-4 text-zinc-100">
-                      <span className="flex items-center gap-2">
-                        <FileType2 className="shrink-0 text-zinc-500" size={15} />
-                        <span className="truncate">{document.filename}</span>
-                      </span>
-                    </td>
-                    <td className="px-4 py-4 uppercase text-zinc-400">
-                      {document.file_type}
-                    </td>
-                    <td className="px-4 py-4">
-                      <span
-                        className={`inline-flex rounded px-2 py-1 font-mono text-[9px] font-semibold uppercase tracking-[0.06em] ${
-                          statusStyles[document.status.toLowerCase()] ??
-                          "bg-zinc-700 text-zinc-300"
-                        }`}
-                      >
-                        {document.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4 text-right text-zinc-400">
-                      {document.chunks_count}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            {!isLoading && dashboard.recentDocuments.length === 0 && (
-              <div className="flex min-h-52 flex-col items-center justify-center px-6 text-center">
-                <UploadCloud className="text-zinc-600" size={28} />
-                <p className="mt-3 text-sm font-medium text-zinc-300">
-                  No documents uploaded yet
-                </p>
+            <div className="mt-6">
+              <p className="micro">Continue where you left off</p>
+              {latest && resume ? (
                 <Link
-                  className="mt-3 text-xs font-semibold text-blue-400 hover:text-blue-300"
-                  href="/documents"
+                  className="mt-3 block rounded-control border border-hairline p-3 transition hover:bg-soft"
+                  href={`/chat?conversation=${encodeURIComponent(resume.id)}`}
                 >
-                  Upload your first document
+                  <span className="flex items-start gap-3">
+                    <span className="flex size-9 shrink-0 items-center justify-center rounded-control bg-soft text-[10px] font-semibold">
+                      <FileText size={15} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium">{resume.title}</span>
+                      <span className="mt-1 line-clamp-2 block text-sm leading-5 text-muted">
+                        “{resume.quote}”
+                      </span>
+                      <span className="mt-2 flex items-center justify-between text-xs text-muted">
+                        <span>
+                          {resume.page ? `Page ${resume.page} · ` : ""}
+                          {formatRelative(resume.updatedAt)}
+                        </span>
+                        <span className="font-semibold text-ink">Resume</span>
+                      </span>
+                    </span>
+                  </span>
+                </Link>
+              ) : (
+                <p className="mt-3 rounded-control border border-dashed border-hairline px-3 py-4 text-sm text-muted">
+                  No threads yet. Ask something once a document is ready.
+                </p>
+              )}
+            </div>
+
+            <div className="mt-6">
+              <div className="flex items-center justify-between">
+                <p className="micro">Recent conversations</p>
+                <span className="figure text-xs text-muted">
+                  {formatNumber(conversations.length)} total
+                </span>
+              </div>
+              <div className="mt-2">
+                {recent.length ? (
+                  recent.map((conversation) => (
+                    <Link
+                      className="flex items-center gap-3 rounded-control px-2 py-2.5 hover:bg-soft"
+                      href={`/chat?conversation=${encodeURIComponent(conversation.id)}`}
+                      key={conversation.id}
+                    >
+                      <span className="size-1.5 rounded-full bg-accent" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm">{conversation.title}</span>
+                        <span className="text-xs text-muted">
+                          {formatRelative(conversation.updated_at)} · {conversation.message_count} messages
+                        </span>
+                      </span>
+                    </Link>
+                  ))
+                ) : (
+                  <p className="px-2 py-3 text-sm text-muted">Recent threads will show up here.</p>
+                )}
+              </div>
+            </div>
+
+            {suggestions.length ? (
+              <div className="mt-5">
+                <p className="micro">Suggested</p>
+                <div className="mt-2 space-y-1">
+                  {suggestions.map((document) => (
+                    <button
+                      className="flex w-full items-center justify-between gap-3 rounded-control px-2 py-2 text-left text-sm hover:bg-soft"
+                      key={document.document_id}
+                      onClick={() => askAbout(document.filename)}
+                      type="button"
+                    >
+                      <span className="truncate">What should I know about {document.filename}?</span>
+                      <span className="text-muted">↗</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="mt-auto pt-6">
+              <div className="flex items-center justify-between text-sm">
+                <span>Index health</span>
+                <span className="figure text-muted">
+                  {formatNumber(ready)} / {formatNumber(documents.length)} ready
+                </span>
+              </div>
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-soft">
+                <div
+                  className="h-full rounded-full bg-ink"
+                  style={{
+                    width: documents.length ? `${(ready / documents.length) * 100}%` : "0%"
+                  }}
+                />
+              </div>
+              <div className="mt-2 flex items-center justify-between text-xs text-muted">
+                <span className="figure">
+                  {formatNumber(chunks)} chunks
+                  <span className="mx-1.5 inline-block size-1.5 rounded-full bg-fail align-middle" />
+                  {formatNumber(failed)} failed
+                </span>
+                <Link
+                  className="font-semibold text-ink"
+                  href={failed ? "/documents?status=failed" : "/documents"}
+                >
+                  Review
                 </Link>
               </div>
-            )}
+            </div>
           </div>
-        </article>
+        </section>
 
-        <article className="rounded-lg border border-white/[0.08] bg-[#1a1a1a] p-4">
-          <div className="border-b border-white/[0.06] pb-4">
-            <h2 className="font-serif text-lg font-semibold text-zinc-100">
-              Recent Activity
-            </h2>
-          </div>
-
-          <div className="mt-4 space-y-4">
-            {activity.map((item) => {
-              const Icon =
-                item.kind === "error"
-                  ? AlertTriangle
-                  : item.kind === "conversation"
-                    ? Bot
-                    : item.title.includes("ready")
-                      ? ThumbsUp
-                      : UploadCloud;
-              const iconTone =
-                item.kind === "error"
-                  ? "border-red-500/30 bg-red-500/10 text-red-400"
-                  : "border-blue-500/30 bg-blue-500/10 text-blue-400";
-
-              return (
-                <div className="flex gap-3" key={item.id}>
-                  <span
-                    className={`flex size-8 shrink-0 items-center justify-center rounded-full border ${iconTone}`}
-                  >
-                    <Icon aria-hidden="true" size={15} />
+        <section className="flex min-h-[720px] flex-col overflow-hidden rounded-pane border border-hairline bg-surface xl:min-h-0">
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-5">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-sm font-medium">Indexing throughput</h2>
+                  <span className="rounded-full border border-hairline px-2 py-0.5 text-[11px] text-muted">
+                    {activeRange.label}
                   </span>
-                  <div className="min-w-0 pb-2">
-                    <p className="text-xs leading-5 text-zinc-200">{item.title}</p>
-                    <p className="mt-1 font-mono text-[10px] font-semibold uppercase tracking-[0.06em] text-zinc-500">
-                      {formatRelativeDate(item.timestamp)} · Organization
-                    </p>
-                  </div>
                 </div>
-              );
-            })}
-
-            {!isLoading && activity.length === 0 && (
-              <div className="flex min-h-52 flex-col items-center justify-center text-center">
-                <RefreshCw className="text-zinc-600" size={27} />
-                <p className="mt-3 text-sm font-medium text-zinc-300">
-                  Activity will appear here
+                <p className="figure mt-3 text-[32px] leading-none tracking-[-0.02em]">
+                  {formatNumber(totalChunks)}
                 </p>
-                <p className="mt-1 max-w-xs text-xs leading-5 text-zinc-500">
-                  Upload a document or start a conversation to populate the
-                  organization feed.
+                <p className="mt-2 text-xs text-muted">
+                  chunks indexed
+                  {delta.percent !== null
+                    ? ` · ${formatSignedPercent(delta.percent)} vs the previous ${activeRange.label}`
+                    : delta.current > 0
+                      ? " · no earlier window to compare"
+                      : ""}
                 </p>
               </div>
+              <div className="text-right">
+                <p className="figure text-xs text-muted">
+                  avg {formatNumber(Math.round(average))} / {range === "24h" ? "hour" : "day"}
+                </p>
+                <div className="mt-3 flex justify-end gap-1">
+                  {ranges.map((item) => (
+                    <button
+                      className={`h-7 rounded-full px-2.5 text-[11px] font-semibold ${
+                        item.id === range
+                          ? "bg-ink text-white"
+                          : "text-muted hover:bg-soft hover:text-ink"
+                      }`}
+                      key={item.id}
+                      onClick={() => {
+                        setRange(item.id);
+                        setBrushOverride(null);
+                      }}
+                      type="button"
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+                {series.types.length ? (
+                  <div className="mt-3 flex flex-wrap justify-end gap-x-3 gap-y-1">
+                    {series.types.map((type, index) => (
+                      <span className="inline-flex items-center gap-1.5 text-[11px] text-muted" key={type}>
+                        <span
+                          className="size-1.5 rounded-full"
+                          style={{
+                            background: ["var(--color-accent)", "var(--color-chart-2)", "var(--color-chart-3)", "var(--color-chart-4)"][index] ?? "var(--color-muted)"
+                          }}
+                        />
+                        {type}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            {totalChunks === 0 ? (
+              <div className="mt-6 flex h-52 items-center justify-center rounded-control border border-dashed border-hairline text-center">
+                <div>
+                  <p className="text-sm font-medium">No chunks indexed in this range</p>
+                  <p className="mt-1 max-w-sm text-sm text-muted">
+                    {documentsInRange
+                      ? "Documents were added here, but they do not have chunks yet."
+                      : "This chart is built from each document’s created date and chunk count."}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <IndexingChart
+                brush={brush}
+                onBrush={setBrushOverride}
+                points={series.points}
+                types={series.types}
+              />
             )}
+            {brushNarrowed && totalChunks > 0 ? (
+              <p className="mt-2 text-xs text-muted">
+                Window {series.points[brush[0]]?.tooltipLabel} – {series.points[brush[1]]?.tooltipLabel}
+                {" · "}
+                <span className="figure">{formatNumber(brushTotal)}</span> chunks
+              </p>
+            ) : null}
+
+            <div className="mt-6 border-t border-hairline pt-5">
+              <CorpusMap
+                groups={map.groups}
+                hidden={map.hidden}
+                nodes={map.nodes}
+                total={map.total}
+              />
+            </div>
           </div>
-        </article>
-      </section>
+        </section>
+
+        <section className="flex min-h-[640px] flex-col overflow-hidden rounded-pane border border-hairline bg-surface xl:min-h-0">
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-5">
+            <div className="flex items-center justify-between px-1">
+              <h2 className="text-sm font-medium">Attention</h2>
+              <span className="figure text-xs text-muted">{formatNumber(attention.length)}</span>
+            </div>
+            <div className="mt-3 space-y-2">
+              {attention.length ? (
+                attention.map((item) => (
+                  <article className="rounded-control border border-hairline p-3" key={item.id}>
+                    <div className="flex items-start gap-2">
+                      <span
+                        className={`mt-1.5 size-1.5 shrink-0 rounded-full ${
+                          item.tone === "fail"
+                            ? "bg-fail"
+                            : item.tone === "warn"
+                              ? "bg-warn"
+                              : "bg-ready"
+                        }`}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium">{item.title}</p>
+                        <p className="mt-1 text-xs leading-5 text-muted">{item.detail}</p>
+                        <div className="mt-3 flex items-center justify-between gap-3">
+                          <span className="text-[11px] text-muted">{item.meta}</span>
+                          <Link
+                            className="rounded-full border border-hairline px-2.5 py-1 text-[11px] font-semibold hover:bg-soft"
+                            href={item.href}
+                          >
+                            {item.action}
+                          </Link>
+                        </div>
+                      </div>
+                    </div>
+                  </article>
+                ))
+              ) : (
+                <p className="rounded-control border border-dashed border-hairline px-3 py-4 text-sm text-muted">
+                  Nothing needs a look. Failed files, files still processing, and ready files untouched for 90 days show up here.
+                </p>
+              )}
+            </div>
+
+            <div className="mt-6 border-t border-hairline px-1 pt-5">
+              <div className="flex items-center justify-between">
+                <h2 className="micro">Activity</h2>
+                <Link className="text-xs font-semibold" href="/insights">
+                  Insights
+                </Link>
+              </div>
+              {activity.length ? (
+                CONVERSATION_GROUPS.map((group) => {
+                  const items = activity.filter((item) => item.group === group);
+
+                  if (!items.length) return null;
+
+                  return (
+                    <div className="mt-4" key={group}>
+                      <p className="micro">{group}</p>
+                      <div className="mt-2 space-y-3">
+                        {items.map((item) => (
+                          <div className="flex gap-2.5" key={item.id}>
+                            <span
+                              className={`mt-1.5 size-1.5 shrink-0 rounded-full ${
+                                item.tone === "fail"
+                                  ? "bg-fail"
+                                  : item.tone === "warn"
+                                    ? "bg-warn"
+                                    : "bg-ready"
+                              }`}
+                            />
+                            <div className="min-w-0">
+                              <p className="text-sm leading-5">{item.title}</p>
+                              <p className="text-[11px] text-muted">{item.meta}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="mt-4 text-sm text-muted">
+                  Uploads and threads will collect here.
+                </p>
+              )}
+            </div>
+
+            <p className="mt-auto px-1 pt-6 text-[11px] text-muted">
+              {workspace.orgName}
+              {workspace.role ? ` · ${workspace.role}` : ""}
+            </p>
+          </div>
+        </section>
+      </div>
     </div>
   );
 }
