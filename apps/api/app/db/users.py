@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 import psycopg
 
 from app.core.config import settings
-from app.db.connection import is_database_configured
+from app.db.connection import is_database_configured, open_connection
 from app.db.documents import DatabaseNotConfiguredError
 
 
@@ -257,7 +257,7 @@ def get_user_profile_by_auth_id(auth_user_id: str) -> UserProfile | None:
     if not is_database_configured():
         raise DatabaseNotConfiguredError("DATABASE_URL is not configured.")
 
-    with psycopg.connect(settings.database_url, connect_timeout=5) as connection:
+    with open_connection() as connection:
         with connection.cursor() as cursor:
             cursor.execute(
                 """
@@ -289,7 +289,7 @@ def get_account_profile(
     if not is_database_configured():
         raise DatabaseNotConfiguredError("DATABASE_URL is not configured.")
 
-    with psycopg.connect(settings.database_url, connect_timeout=5) as connection:
+    with open_connection() as connection:
         with connection.cursor() as cursor:
             cursor.execute(
                 """
@@ -324,7 +324,7 @@ def get_team(organization_id: str) -> Team | None:
     if not is_database_configured():
         raise DatabaseNotConfiguredError("DATABASE_URL is not configured.")
 
-    with psycopg.connect(settings.database_url, connect_timeout=5) as connection:
+    with open_connection() as connection:
         with connection.cursor() as cursor:
             cursor.execute(
                 """
@@ -375,7 +375,7 @@ def update_organization_name(
     if not is_database_configured():
         raise DatabaseNotConfiguredError("DATABASE_URL is not configured.")
 
-    with psycopg.connect(settings.database_url, connect_timeout=5) as connection:
+    with open_connection() as connection:
         with connection.cursor() as cursor:
             cursor.execute(
                 """
@@ -415,7 +415,7 @@ def update_team_member_role(
     if not is_database_configured():
         raise DatabaseNotConfiguredError("DATABASE_URL is not configured.")
 
-    with psycopg.connect(settings.database_url, connect_timeout=5) as connection:
+    with open_connection() as connection:
         with connection.cursor() as cursor:
             cursor.execute(
                 """
@@ -464,7 +464,7 @@ def create_organization_invitation(
     normalized_email = invited_email.strip().lower()
     expires_at = datetime.now(timezone.utc) + timedelta(days=7)
 
-    with psycopg.connect(settings.database_url, connect_timeout=5) as connection:
+    with open_connection() as connection:
         with connection.cursor() as cursor:
             cursor.execute(
                 """
@@ -532,7 +532,7 @@ def list_pending_invitations_for_email(email: str) -> list[OrganizationInvitatio
 
     normalized_email = email.strip().lower()
 
-    with psycopg.connect(settings.database_url, connect_timeout=5) as connection:
+    with open_connection() as connection:
         with connection.cursor() as cursor:
             cursor.execute(
                 """
@@ -575,7 +575,7 @@ def accept_organization_invitation(
 
     normalized_email = email.strip().lower()
 
-    with psycopg.connect(settings.database_url, connect_timeout=5) as connection:
+    with open_connection() as connection:
         with connection.cursor() as cursor:
             cursor.execute(
                 """
@@ -705,7 +705,7 @@ def remove_team_member_from_organization(
     if not is_database_configured():
         raise DatabaseNotConfiguredError("DATABASE_URL is not configured.")
 
-    with psycopg.connect(settings.database_url, connect_timeout=5) as connection:
+    with open_connection() as connection:
         with connection.cursor() as cursor:
             cursor.execute(
                 """
@@ -778,7 +778,7 @@ def update_account_profile(profile: AccountProfileUpdate) -> AccountProfile | No
     if not is_database_configured():
         raise DatabaseNotConfiguredError("DATABASE_URL is not configured.")
 
-    with psycopg.connect(settings.database_url, connect_timeout=5) as connection:
+    with open_connection() as connection:
         with connection.cursor() as cursor:
             cursor.execute(
                 """
@@ -823,7 +823,7 @@ def get_or_create_user_profile(profile: AuthProfileCreate) -> UserProfile:
     if not is_database_configured():
         raise DatabaseNotConfiguredError("DATABASE_URL is not configured.")
 
-    with psycopg.connect(settings.database_url, connect_timeout=5) as connection:
+    with open_connection() as connection:
         with connection.cursor() as cursor:
             cursor.execute(
                 """
