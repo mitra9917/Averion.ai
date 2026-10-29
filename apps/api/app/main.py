@@ -72,6 +72,7 @@ def create_app() -> FastAPI:
     app.include_router(users_router)
 
     @app.get("/", tags=["root"])
+    @app.head("/", include_in_schema=False)
     def read_root() -> dict[str, str]:
         return {
             "message": "Averion.ai API",

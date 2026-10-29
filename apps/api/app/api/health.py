@@ -8,14 +8,25 @@ from app.schemas.health import AIHealthResponse, DatabaseHealthResponse, HealthR
 router = APIRouter(tags=["health"])
 
 
-@router.get("/health", response_model=HealthResponse)
-@router.head("/health")
-def health_check() -> HealthResponse:
+def _health_payload() -> HealthResponse:
     return HealthResponse(
         status="ok",
         service=settings.service_name,
         version=settings.app_version
     )
+
+
+@router.get("/health", response_model=HealthResponse)
+@router.head("/health")
+def health_check() -> HealthResponse:
+    return _health_payload()
+
+
+# Common Render dashboard typo; keep deploy health checks passing.
+@router.get("/heath", response_model=HealthResponse, include_in_schema=False)
+@router.head("/heath", include_in_schema=False)
+def health_check_typo_alias() -> HealthResponse:
+    return _health_payload()
 
 
 @router.get("/health/database", response_model=DatabaseHealthResponse)
