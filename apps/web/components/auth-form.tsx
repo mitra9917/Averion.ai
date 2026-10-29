@@ -28,7 +28,7 @@ const copy = {
     title: "Sign in to Averion",
     description: "Use your work email to continue to your knowledge workspace.",
     button: "Sign in",
-    pending: "Signing in...",
+    pending: "Signing in…",
     alternatePrompt: "New to Averion?",
     alternateLabel: "Create an account",
     alternateHref: "/signup"
@@ -36,14 +36,18 @@ const copy = {
   signup: {
     eyebrow: "Create account",
     title: "Start your Averion workspace",
-    description: "Create your account with a valid email address. Gmail-only rules can be enabled from env config later.",
+    description:
+      "Create your account with a valid email address. Domain rules follow the workspace configuration.",
     button: "Create account",
-    pending: "Creating account...",
+    pending: "Creating account…",
     alternatePrompt: "Already have an account?",
     alternateLabel: "Sign in",
     alternateHref: "/login"
   }
 } satisfies Record<AuthMode, Record<string, string>>;
+
+const fieldClass =
+  "mt-2 h-11 w-full rounded-control border border-hairline bg-surface px-3 text-sm text-ink outline-none placeholder:text-muted";
 
 function getSafeNextPath(): string {
   if (typeof window === "undefined") {
@@ -123,7 +127,8 @@ export function AuthForm({ mode }: AuthFormProps) {
     if (!supabase) {
       setStatus({
         kind: "error",
-        message: "Supabase auth is not configured yet. Add the frontend Supabase env values first."
+        message:
+          "Supabase auth is not configured yet. Add the frontend Supabase env values first."
       });
       return;
     }
@@ -150,7 +155,8 @@ export function AuthForm({ mode }: AuthFormProps) {
 
         setStatus({
           kind: "success",
-          message: "Account created. Check your email to verify your account before signing in."
+          message:
+            "Account created. Check your email to verify your account before signing in."
         });
         setPassword("");
         setConfirmPassword("");
@@ -185,7 +191,8 @@ export function AuthForm({ mode }: AuthFormProps) {
     if (!supabase) {
       setStatus({
         kind: "error",
-        message: "Supabase auth is not configured yet. Add the frontend Supabase env values first."
+        message:
+          "Supabase auth is not configured yet. Add the frontend Supabase env values first."
       });
       return;
     }
@@ -214,171 +221,146 @@ export function AuthForm({ mode }: AuthFormProps) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 px-4 py-8 text-white sm:px-6 lg:px-8">
-      <div className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-6xl items-center justify-center">
-        <div className="grid w-full overflow-hidden rounded-lg border border-white/10 bg-white/[0.03] shadow-2xl shadow-blue-950/30 lg:grid-cols-[0.95fr_1.05fr]">
-          <section className="hidden border-r border-white/10 bg-slate-900/80 p-10 lg:block">
-            <Link className="flex items-center gap-3" href="/">
-              <span className="flex size-10 items-center justify-center rounded-lg bg-blue-500 text-sm font-semibold text-white">
-                A
-              </span>
-              <span>
-                <span className="block text-base font-semibold">Averion.ai</span>
-                <span className="block text-xs uppercase tracking-[0.18em] text-slate-400">
-                  Knowledge Copilot
-                </span>
-              </span>
-            </Link>
+    <div className="min-h-dvh bg-canvas text-ink">
+      <div className="mx-auto grid min-h-dvh max-w-6xl lg:grid-cols-[1.05fr_0.95fr]">
+        <section className="hidden flex-col justify-between px-12 py-12 lg:flex">
+          <Link className="flex items-center gap-3" href="/">
+            <span className="flex size-9 items-center justify-center rounded-[10px] bg-ink text-sm font-semibold text-white">
+              A
+            </span>
+            <span>
+              <span className="block text-sm font-medium">Averion</span>
+              <span className="micro mt-1 block">Knowledge copilot</span>
+            </span>
+          </Link>
+          <div className="max-w-md">
+            <p className="micro">{formCopy.eyebrow}</p>
+            <h1 className="display mt-4 text-[40px]">
+              Secure access for your company knowledge.
+            </h1>
+            <p className="mt-4 text-sm leading-6 text-muted">
+              Sign in before uploading documents, asking questions, or saving feedback.
+              Supabase Auth handles the session. Averion keeps the library inside your organization.
+            </p>
+          </div>
+          <p className="text-xs text-muted">Answers stay attached to the passage they came from.</p>
+        </section>
 
-            <div className="mt-20 max-w-md">
-              <p className="text-sm font-medium text-cyan-300">{formCopy.eyebrow}</p>
-              <h1 className="mt-3 text-4xl font-semibold tracking-normal text-white">
-                Secure access for your company knowledge.
-              </h1>
-              <p className="mt-5 text-sm leading-6 text-slate-300">
-                Sign in before uploading documents, asking questions, or saving
-                feedback. Supabase Auth handles sessions while Averion keeps your
-                product data scoped to your organization.
-              </p>
+        <section className="flex items-center px-4 py-10 sm:px-8">
+          <div className="mx-auto w-full max-w-md rounded-pane border border-hairline bg-surface p-6 shadow-float sm:p-8">
+            <div className="lg:hidden">
+              <Link className="flex items-center gap-3" href="/">
+                <span className="flex size-9 items-center justify-center rounded-[10px] bg-ink text-sm font-semibold text-white">
+                  A
+                </span>
+                <span className="text-sm font-medium">Averion</span>
+              </Link>
             </div>
-          </section>
+            <div className="mt-8 lg:mt-0">
+              <p className="micro">{formCopy.eyebrow}</p>
+              <h2 className="mt-3 text-[28px] tracking-[-0.02em]">{formCopy.title}</h2>
+              <p className="mt-2 text-sm leading-6 text-muted">{formCopy.description}</p>
+            </div>
 
-          <section className="bg-white p-6 text-slate-950 sm:p-10">
-            <div className="mx-auto max-w-md">
-              <div className="lg:hidden">
-                <Link className="flex items-center gap-3" href="/">
-                  <span className="flex size-10 items-center justify-center rounded-lg bg-blue-600 text-sm font-semibold text-white">
-                    A
-                  </span>
-                  <span>
-                    <span className="block text-base font-semibold">Averion.ai</span>
-                    <span className="block text-xs text-slate-500">Knowledge Copilot</span>
-                  </span>
-                </Link>
-              </div>
+            <button
+              className="mt-8 flex h-11 w-full items-center justify-center gap-3 rounded-control border border-hairline bg-surface text-sm font-semibold hover:bg-soft disabled:opacity-60"
+              disabled={isSubmitting || isOAuthSubmitting}
+              onClick={handleGoogleSignIn}
+              type="button"
+            >
+              <span className="flex size-5 items-center justify-center rounded-full border border-hairline text-[11px] font-semibold">
+                G
+              </span>
+              {isOAuthSubmitting ? "Opening Google…" : "Continue with Google"}
+            </button>
 
-              <div className="mt-10 lg:mt-0">
-                <p className="text-sm font-medium text-blue-700">{formCopy.eyebrow}</p>
-                <h2 className="mt-2 text-3xl font-semibold tracking-normal">
-                  {formCopy.title}
-                </h2>
-                <p className="mt-3 text-sm leading-6 text-slate-600">
-                  {formCopy.description}
-                </p>
-              </div>
+            <div className="mt-6 flex items-center gap-3">
+              <span className="h-px flex-1 bg-hairline" />
+              <span className="micro">or</span>
+              <span className="h-px flex-1 bg-hairline" />
+            </div>
 
-              <button
-                className="mt-8 flex w-full items-center justify-center gap-3 rounded-md border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={isSubmitting || isOAuthSubmitting}
-                onClick={handleGoogleSignIn}
-                type="button"
-              >
-                <span
-                  aria-hidden="true"
-                  className="flex size-5 items-center justify-center rounded-full border border-slate-200 text-xs font-bold text-blue-600"
-                >
-                  G
-                </span>
-                {isOAuthSubmitting ? "Opening Google..." : "Continue with Google"}
-              </button>
-
-              <div className="mt-6 flex items-center gap-3">
-                <span className="h-px flex-1 bg-slate-200" />
-                <span className="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">
-                  or
-                </span>
-                <span className="h-px flex-1 bg-slate-200" />
-              </div>
-
-              <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
-                {isSignup && (
-                  <label className="block">
-                    <span className="text-sm font-medium text-slate-700">Full name</span>
-                    <input
-                      autoComplete="name"
-                      className="mt-2 w-full rounded-md border border-slate-300 bg-white px-3 py-3 text-sm text-slate-950 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                      onChange={(event) => setName(event.target.value)}
-                      placeholder="Shubham Mitra"
-                      type="text"
-                      value={name}
-                    />
-                  </label>
-                )}
-
+            <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+              {isSignup ? (
                 <label className="block">
-                  <span className="text-sm font-medium text-slate-700">Email</span>
+                  <span className="text-sm font-medium">Full name</span>
                   <input
-                    autoComplete="email"
-                    className="mt-2 w-full rounded-md border border-slate-300 bg-white px-3 py-3 text-sm text-slate-950 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                    onChange={(event) => setEmail(event.target.value)}
-                    placeholder="you@company.com"
-                    required
-                    type="email"
-                    value={email}
+                    autoComplete="name"
+                    className={fieldClass}
+                    onChange={(event) => setName(event.target.value)}
+                    placeholder="Your name"
+                    type="text"
+                    value={name}
                   />
                 </label>
-
+              ) : null}
+              <label className="block">
+                <span className="text-sm font-medium">Email</span>
+                <input
+                  autoComplete="email"
+                  className={fieldClass}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="you@company.com"
+                  required
+                  type="email"
+                  value={email}
+                />
+              </label>
+              <label className="block">
+                <span className="text-sm font-medium">Password</span>
+                <input
+                  autoComplete={isSignup ? "new-password" : "current-password"}
+                  className={fieldClass}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="At least 8 characters"
+                  required
+                  type="password"
+                  value={password}
+                />
+              </label>
+              {isSignup ? (
                 <label className="block">
-                  <span className="text-sm font-medium text-slate-700">Password</span>
+                  <span className="text-sm font-medium">Confirm password</span>
                   <input
-                    autoComplete={isSignup ? "new-password" : "current-password"}
-                    className="mt-2 w-full rounded-md border border-slate-300 bg-white px-3 py-3 text-sm text-slate-950 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                    onChange={(event) => setPassword(event.target.value)}
-                    placeholder="At least 8 characters"
+                    autoComplete="new-password"
+                    className={fieldClass}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                    placeholder="Repeat your password"
                     required
                     type="password"
-                    value={password}
+                    value={confirmPassword}
                   />
                 </label>
-
-                {isSignup && (
-                  <label className="block">
-                    <span className="text-sm font-medium text-slate-700">
-                      Confirm password
-                    </span>
-                    <input
-                      autoComplete="new-password"
-                      className="mt-2 w-full rounded-md border border-slate-300 bg-white px-3 py-3 text-sm text-slate-950 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                      onChange={(event) => setConfirmPassword(event.target.value)}
-                      placeholder="Repeat your password"
-                      required
-                      type="password"
-                      value={confirmPassword}
-                    />
-                  </label>
-                )}
-
-                {status.kind !== "idle" && (
-                  <div
-                    className={
-                      status.kind === "success"
-                        ? "rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
-                        : "rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
-                    }
-                    role="status"
-                  >
-                    {status.message}
-                  </div>
-                )}
-
-                <button
-                  className="w-full rounded-md bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
-                  disabled={isSubmitting || isOAuthSubmitting}
-                  type="submit"
+              ) : null}
+              {status.kind !== "idle" ? (
+                <div
+                  className="flex items-start gap-2 rounded-control border border-hairline bg-soft px-3 py-3 text-sm"
+                  role="status"
                 >
-                  {isSubmitting ? formCopy.pending : formCopy.button}
-                </button>
-              </form>
-
-              <p className="mt-6 text-center text-sm text-slate-600">
-                {formCopy.alternatePrompt}{" "}
-                <Link className="font-semibold text-blue-700 hover:text-blue-800" href={formCopy.alternateHref}>
-                  {formCopy.alternateLabel}
-                </Link>
-              </p>
-            </div>
-          </section>
-        </div>
+                  <span
+                    className={`mt-1.5 size-1.5 shrink-0 rounded-full ${
+                      status.kind === "success" ? "bg-ready" : "bg-fail"
+                    }`}
+                  />
+                  <span>{status.message}</span>
+                </div>
+              ) : null}
+              <button
+                className="h-11 w-full rounded-full bg-ink text-sm font-semibold text-white hover:bg-ink/90 disabled:opacity-50"
+                disabled={isSubmitting || isOAuthSubmitting}
+                type="submit"
+              >
+                {isSubmitting ? formCopy.pending : formCopy.button}
+              </button>
+            </form>
+            <p className="mt-6 text-center text-sm text-muted">
+              {formCopy.alternatePrompt}{" "}
+              <Link className="font-semibold text-ink underline decoration-hairline underline-offset-4" href={formCopy.alternateHref}>
+                {formCopy.alternateLabel}
+              </Link>
+            </p>
+          </div>
+        </section>
       </div>
     </div>
   );

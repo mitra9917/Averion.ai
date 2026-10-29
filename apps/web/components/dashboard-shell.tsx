@@ -1,25 +1,22 @@
 "use client";
 
-import {
-  Bell,
-  Clock3,
-  FileText,
-  LayoutDashboard,
-  LogOut,
-  Menu,
-  MessageSquare,
-  Plus,
-  Search,
-  Settings,
-  UserRound,
-  Users,
-  X
-} from "lucide-react";
+import { Search } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
+import { CommandPalette } from "@/components/command-palette";
+import {
+  destinationForPath,
+  destinations,
+  isDestinationActive
+} from "@/components/destinations";
+import {
+  WorkspaceProvider,
+  type WorkspaceChrome
+} from "@/components/workspace-context";
+import { getAccountProfile } from "@/lib/api";
+import { firstName, initials } from "@/lib/meridian";
 import {
   getSupabaseBrowserClient,
   getSupabaseSessionSafely
@@ -30,13 +27,6 @@ type DashboardShellProps = {
   immersive?: boolean;
 };
 
-const navigationItems = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/documents", label: "Documents", icon: FileText },
-  { href: "/chat", label: "Chat", icon: MessageSquare },
-  { href: "/account", label: "Settings", icon: Settings }
-] as const;
-
 export function DashboardShell({
   children,
   immersive = false
@@ -44,9 +34,26 @@ export function DashboardShell({
   const pathname = usePathname();
   const router = useRouter();
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
-  const [displayName, setDisplayName] = useState("Account");
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isSigningOut, setIsSigningOut] = useState(false);
+  const [orgName, setOrgName] = useState("Workspace");
+  const [userName, setUserName] = useState("there");
+  const [role, setRole] = useState<string | null>(null);
+  const [email, setEmail] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [trail, setTrailState] = useState<string | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [modLabel] = useState(() =>
+    typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform)
+      ? "⌘"
+      : "Ctrl"
+  );
+
+  const setTrail = useCallback((value: string | null) => {
+    setTrailState(value);
+  }, []);
+
+  const openSearch = useCallback(() => {
+    setSearchOpen(true);
+  }, []);
 
   useEffect(() => {
     if (!supabase) {
@@ -62,11 +69,14 @@ export function DashboardShell({
       const name =
         user?.user_metadata?.full_name ??
         user?.user_metadata?.name ??
-        user?.email?.split("@")[0] ??
-        "Account";
+        user?.email?.split("@")[0];
 
-      if (!ignore) {
-        setDisplayName(name);
+      if (!ignore && typeof name === "string" && name.trim()) {
+        setUserName(name.trim());
+      }
+
+      if (!ignore && user?.email) {
+        setEmail(user.email);
       }
     }
 
@@ -77,206 +87,196 @@ export function DashboardShell({
     };
   }, [supabase]);
 
-  async function handleLogout() {
-    setIsSigningOut(true);
+  useEffect(() => {
+    let ignore = false;
 
-    if (supabase) {
-      await supabase.auth.signOut();
+    async function loadProfile() {
+      try {
+        const profile = await getAccountProfile();
+
+        if (ignore) return;
+
+        setOrgName(profile.organization_name?.trim() || "Workspace");
+        setRole(profile.role);
+        setEmail(profile.email);
+        setAvatarUrl(profile.avatar_url);
+
+        const name = profile.name?.trim() || profile.email?.split("@")[0];
+
+        if (name) {
+          setUserName(name);
+        }
+      } catch {
+        if (!ignore) {
+          setOrgName((current) => current || "Workspace");
+        }
+      }
     }
 
-    router.replace("/login");
-  }
+    void loadProfile();
 
-  const sidebar = (
-    <>
-      <div className="border-b border-white/[0.06] px-5 py-5">
-        <Link className="flex items-center gap-3" href="/">
-          <span className="flex size-9 items-center justify-center rounded-lg bg-blue-500 text-sm font-bold text-white shadow-lg shadow-blue-500/20">
-            A
-          </span>
-          <span>
-            <span className="block text-sm font-semibold text-white">
-              Averion.ai
-            </span>
-            <span className="block text-[11px] text-zinc-500">
-              Knowledge Copilot
-            </span>
-          </span>
-        </Link>
-      </div>
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
-      <div className="px-5 py-5">
-        <Link
-          className="flex h-10 w-full items-center justify-center gap-2 rounded-md bg-blue-500 text-xs font-semibold text-white shadow-lg shadow-blue-500/15 transition hover:bg-blue-600"
-          href="/chat"
-          onClick={() => setIsMenuOpen(false)}
-        >
-          <Plus aria-hidden="true" size={16} />
-          New Chat
-        </Link>
-      </div>
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      const meta = event.metaKey || event.ctrlKey;
 
-      <nav
-        aria-label="Workspace navigation"
-        className="flex-1 space-y-1 overflow-y-auto px-2"
-      >
-        {navigationItems.map(({ href, icon: Icon, label }) => {
-          const isActive =
-            href === "/" ? pathname === href : pathname.startsWith(href);
+      if (!meta) return;
 
-          return (
-            <Link
-              className={`flex h-12 items-center gap-3 rounded-r-md border-l-4 px-4 text-xs font-semibold transition ${
-                isActive
-                  ? "border-blue-500 bg-zinc-800 text-white"
-                  : "border-transparent text-zinc-400 hover:bg-zinc-900 hover:text-white"
-              }`}
-              href={href}
-              key={href}
-              onClick={() => setIsMenuOpen(false)}
-            >
-              <Icon
-                aria-hidden="true"
-                className={isActive ? "text-blue-500" : ""}
-                size={19}
-              />
-              {label}
-            </Link>
-          );
-        })}
-      </nav>
+      if (event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setSearchOpen((open) => !open);
+        return;
+      }
 
-      <div className="border-t border-white/[0.06] p-4">
-        <button
-          className="flex h-11 w-full items-center gap-3 rounded-md px-4 text-left text-xs font-semibold text-zinc-400 transition hover:bg-zinc-900 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-          disabled={isSigningOut}
-          onClick={handleLogout}
-          type="button"
-        >
-          <LogOut aria-hidden="true" size={18} />
-          {isSigningOut ? "Signing out..." : "Log Out"}
-        </button>
-      </div>
-    </>
+      const shortcut = destinations.find((item) => item.shortcut === event.key);
+
+      if (shortcut) {
+        event.preventDefault();
+        router.push(shortcut.href);
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [router]);
+
+  const section = destinationForPath(pathname);
+  const trailSuffix = pathname.startsWith("/chat") ? trail : null;
+  const givenName = firstName(userName) ?? "there";
+  const chrome = useMemo<WorkspaceChrome>(
+    () => ({
+      orgName,
+      userName: givenName,
+      userInitials: initials(userName),
+      orgInitials: initials(orgName),
+      role,
+      email,
+      avatarUrl,
+      openSearch,
+      setTrail
+    }),
+    [avatarUrl, email, givenName, openSearch, orgName, role, setTrail, userName]
   );
 
   return (
-    <div className="min-h-screen bg-[#111111] text-zinc-100">
-      <aside className="fixed inset-y-0 left-0 z-50 hidden w-[280px] flex-col border-r border-white/[0.06] bg-[#111111] md:flex">
-        {sidebar}
-      </aside>
-
-      {isMenuOpen && (
-        <div className="fixed inset-0 z-[70] md:hidden">
-          <button
-            aria-label="Close navigation"
-            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-            onClick={() => setIsMenuOpen(false)}
-            type="button"
-          />
-          <aside className="relative flex h-full w-[min(86vw,300px)] flex-col border-r border-white/10 bg-[#111111] shadow-2xl">
-            <button
-              aria-label="Close navigation"
-              className="absolute right-3 top-3 rounded-md p-2 text-zinc-400 transition hover:bg-zinc-800 hover:text-white"
-              onClick={() => setIsMenuOpen(false)}
-              type="button"
-            >
-              <X size={18} />
-            </button>
-            {sidebar}
-          </aside>
-        </div>
-      )}
-
-      <header
-        className={`fixed inset-x-0 top-0 z-40 h-16 items-center border-b border-white/[0.06] bg-[#111111]/90 px-4 backdrop-blur-xl md:left-[280px] md:px-8 ${
-          immersive ? "flex md:hidden" : "flex"
+    <WorkspaceProvider value={chrome}>
+      <div
+        className={`bg-canvas text-ink ${
+          immersive ? "h-dvh overflow-hidden" : "min-h-dvh"
         }`}
       >
-        <button
-          aria-label="Open navigation"
-          className="mr-3 rounded-md p-2 text-zinc-400 transition hover:bg-zinc-800 hover:text-white md:hidden"
-          onClick={() => setIsMenuOpen(true)}
-          type="button"
+        <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-4 bg-canvas/90 px-4 backdrop-blur-md sm:px-5">
+          <nav
+            aria-label="Breadcrumb"
+            className="flex min-w-0 items-center gap-2 text-sm"
+          >
+            <Link
+              className="flex size-6 shrink-0 items-center justify-center rounded-md bg-ink text-[11px] font-semibold text-white"
+              href="/"
+            >
+              A
+            </Link>
+            <Link className="truncate text-muted hover:text-ink" href="/">
+              {orgName}
+            </Link>
+            <span className="text-hairline">/</span>
+            <Link
+              className={`truncate ${trailSuffix ? "text-muted hover:text-ink" : "text-ink"}`}
+              href={section.href}
+            >
+              {section.crumb}
+            </Link>
+            {trailSuffix ? (
+              <>
+                <span className="text-hairline">/</span>
+                <span className="truncate text-ink">{trailSuffix}</span>
+              </>
+            ) : null}
+          </nav>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              className="inline-flex h-8 items-center gap-2 rounded-full border border-hairline bg-surface px-2.5 text-muted hover:text-ink"
+              onClick={() => setSearchOpen(true)}
+              type="button"
+            >
+              <Search size={14} />
+              <span className="hidden text-xs sm:inline">Search</span>
+              <kbd className="rounded-md border border-hairline bg-soft px-1.5 py-0.5 font-mono text-[10px] text-muted">
+                {modLabel}K
+              </kbd>
+            </button>
+            <Link
+              aria-label={`Open settings for ${userName}`}
+              className="relative flex size-8 items-center justify-center overflow-hidden rounded-full border border-hairline bg-surface text-[11px] font-semibold"
+              href="/account"
+              title={userName}
+            >
+              {avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img alt="" className="size-full object-cover" src={avatarUrl} />
+              ) : (
+                initials(userName)
+              )}
+            </Link>
+          </div>
+        </header>
+        <main className={immersive ? "flex h-[calc(100dvh-3.5rem)] min-h-0 flex-col" : undefined}>
+          {children}
+        </main>
+        <nav
+          aria-label="Workspace"
+          className="fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-0.5 rounded-[20px] border border-hairline bg-surface/95 p-1.5 shadow-float backdrop-blur-md"
         >
-          <Menu size={20} />
-        </button>
-
-        <Link
-          className="mr-4 flex items-center gap-2 md:hidden"
-          href="/"
-          onClick={() => setIsMenuOpen(false)}
-        >
-          <span className="flex size-8 items-center justify-center rounded-md bg-blue-500 text-xs font-bold text-white">
+          <span className="flex size-10 items-center justify-center rounded-[12px] bg-ink text-xs font-semibold text-white">
             A
           </span>
-          <span className="text-sm font-semibold">Averion.ai</span>
-        </Link>
+          <span className="mx-1 h-6 w-px bg-hairline" />
+          {destinations.map((item) => {
+            const active = isDestinationActive(pathname, item.href);
+            const Icon = item.icon;
 
-        <form
-          action="/documents"
-          className="relative hidden w-72 focus-within:ring-2 focus-within:ring-blue-500/40 lg:block"
-        >
-          <Search
-            aria-hidden="true"
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500"
-            size={16}
-          />
-          <input
-            aria-label="Search knowledge base"
-            className="h-9 w-full rounded-md border border-white/10 bg-[#0d0d0d] pl-9 pr-3 text-xs text-zinc-200 outline-none transition placeholder:text-zinc-600 focus:border-blue-500/60"
-            name="search"
-            placeholder="Search knowledge base..."
-            type="search"
-          />
-        </form>
-
-        <div className="ml-auto flex items-center gap-1 sm:gap-2">
-          <button
-            aria-label="Notifications"
-            className="relative rounded-md p-2 text-zinc-400 transition hover:bg-zinc-800 hover:text-white"
-            title="Notifications"
-            type="button"
-          >
-            <Bell size={18} />
-            <span className="absolute right-2 top-1.5 size-1.5 rounded-full bg-blue-500" />
-          </button>
+            return (
+              <Link
+                aria-current={active ? "page" : undefined}
+                className="group relative flex size-10 items-center justify-center"
+                href={item.href}
+                key={item.href}
+                title={`${item.label} (${modLabel}${item.shortcut})`}
+              >
+                <span
+                  className={`absolute inset-0.5 rounded-[12px] transition ${
+                    active ? "bg-surface shadow-float" : "group-hover:bg-soft"
+                  }`}
+                />
+                <Icon
+                  aria-hidden="true"
+                  className={`relative ${active ? "text-accent" : "text-muted group-hover:text-ink"}`}
+                  size={18}
+                  strokeWidth={1.75}
+                />
+                <span className="pointer-events-none absolute -top-9 left-1/2 -translate-x-1/2 rounded-full bg-ink px-2 py-1 text-[11px] font-medium whitespace-nowrap text-white opacity-0 transition group-hover:opacity-100 group-focus-visible:opacity-100">
+                  {item.label}
+                </span>
+              </Link>
+            );
+          })}
+          <span className="mx-1 h-6 w-px bg-hairline" />
           <Link
-            aria-label="Conversation history"
-            className="rounded-md p-2 text-zinc-400 transition hover:bg-zinc-800 hover:text-white"
-            href="/chat"
-            title="Conversation history"
-          >
-            <Clock3 size={18} />
-          </Link>
-          <span className="mx-2 hidden h-6 w-px bg-white/10 sm:block" />
-          <Link
-            className="hidden h-8 items-center gap-2 rounded-md border border-white/10 bg-zinc-900 px-3 text-[11px] font-semibold text-zinc-200 transition hover:border-blue-500/40 hover:bg-zinc-800 sm:flex"
+            aria-label={`${orgName}, signed in`}
+            className="relative flex size-10 items-center justify-center rounded-full text-[11px] font-semibold"
             href="/account"
+            title={`${orgName} · signed in`}
           >
-            <Users size={14} />
-            Invite Team
+            {initials(orgName)}
+            <span className="absolute right-1.5 bottom-1.5 size-1.5 rounded-full bg-ready ring-2 ring-surface" />
           </Link>
-          <Link
-            aria-label={`Open ${displayName} account`}
-            className="ml-1 flex size-8 items-center justify-center rounded-full border border-white/10 bg-zinc-800 text-zinc-300 transition hover:border-blue-500/50 hover:text-white"
-            href="/account"
-            title={displayName}
-          >
-            <UserRound size={15} />
-          </Link>
-        </div>
-      </header>
-
-      <main
-        className={
-          immersive
-            ? "min-h-screen pt-16 md:ml-[280px] md:pt-0"
-            : "min-h-screen px-4 pb-12 pt-24 md:ml-[280px] md:px-8"
-        }
-      >
-        {children}
-      </main>
-    </div>
+        </nav>
+        <CommandPalette open={searchOpen} onClose={() => setSearchOpen(false)} />
+      </div>
+    </WorkspaceProvider>
   );
 }
