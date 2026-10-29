@@ -491,11 +491,18 @@ export async function submitFeedback(request: FeedbackDraft): Promise<FeedbackRe
 
 export async function listDocuments(): Promise<DocumentListItem[]> {
   const authHeaders = await getAuthHeaders();
-  const response = await fetch(`${API_BASE_URL}/documents`, {
-    method: "GET",
-    headers: authHeaders,
-    cache: "no-store"
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/documents`, {
+      method: "GET",
+      headers: authHeaders,
+      cache: "no-store"
+    });
+  } catch {
+    throw new Error(
+      "Could not reach the API. Render may be waking up or busy indexing a document. Wait a few seconds and click Refresh."
+    );
+  }
 
   if (!response.ok) {
     const body = await response.json().catch(() => null);

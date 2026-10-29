@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import time
 
@@ -64,6 +65,24 @@ def process_uploaded_document(document_id: str, organization_id: str) -> None:
         process_ingestion_job(job)
 
 
+async def run_document_ingestion_in_thread(
+    document_id: str,
+    organization_id: str
+) -> None:
+    """Run sync ingestion off the event loop so polling /documents stays responsive."""
+    try:
+        await asyncio.to_thread(
+            process_uploaded_document,
+            document_id,
+            organization_id
+        )
+    except Exception:
+        logger.exception(
+            "Background document ingestion failed",
+            extra={"document_id": document_id}
+        )
+
+
 @router.get("", response_model=list[DocumentListItem])
 def get_documents(
     organization_id: str = Depends(get_current_organization_id)
@@ -111,7 +130,7 @@ async def upload_document(
         )
         if response.metadata_stored and settings.inline_document_ingestion:
             background_tasks.add_task(
-                process_uploaded_document,
+                run_document_ingestion_in_thread,
                 response.document_id,
                 context.organization_id
             )
