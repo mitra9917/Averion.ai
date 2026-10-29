@@ -1,3 +1,7 @@
+# CPU-only PyTorch keeps Render free tier (512 MB) from pulling CUDA wheels.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.5.1+cpu
+
 fastapi==0.116.1
 uvicorn[standard]==0.35.0
 pydantic-settings==2.10.1
