@@ -169,7 +169,6 @@ def claim_next_ingestion_job(worker_id: str) -> DocumentIngestionJob | None:
                 """,
                 (
                     settings.document_job_lease_seconds,
-                    settings.document_job_lease_seconds,
                     settings.document_job_inline_lease_seconds,
                     worker_id,
                 )
