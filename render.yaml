@@ -1,5 +1,5 @@
-# Render Blueprint: Averion API + document ingestion worker
-# Dashboard: New -> Blueprint -> connect GitHub repo
+# Free Render: one web service (API + background upload ingestion on the same instance).
+# Background Workers are paid-only on Render — do not add a worker service for free tier.
 
 services:
   - type: web
@@ -13,10 +13,8 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.12.8"
-      - key: AVERION_PROCESS
-        value: api
       - key: INLINE_DOCUMENT_INGESTION
-        value: "false"
+        value: "true"
       - key: DOCUMENT_STORAGE_BACKEND
         value: supabase
       - key: SUPABASE_STORAGE_BUCKET
@@ -26,13 +24,13 @@ services:
       - key: EMBEDDING_MODEL_PRELOAD
         value: "false"
       - key: EMBEDDING_BATCH_SIZE
-        value: "8"
+        value: "4"
       - key: TOKENIZERS_PARALLELISM
         value: "false"
       - key: OMP_NUM_THREADS
-        value: "2"
+        value: "1"
       - key: MKL_NUM_THREADS
-        value: "2"
+        value: "1"
       - key: DATABASE_URL
         sync: false
       - key: SUPABASE_URL
@@ -48,41 +46,4 @@ services:
       - key: LLM_PROVIDER_API_KEY
         sync: false
       - key: LLM_MODEL_NAME
-        sync: false
-
-  - type: worker
-    name: averion-document-worker
-    runtime: python
-    rootDir: apps/api
-    plan: starter
-    buildCommand: pip install -r requirements.txt
-    startCommand: python -m app.workers.document_ingestion
-    envVars:
-      - key: PYTHON_VERSION
-        value: "3.12.8"
-      - key: AVERION_PROCESS
-        value: worker
-      - key: DOCUMENT_STORAGE_BACKEND
-        value: supabase
-      - key: SUPABASE_STORAGE_BUCKET
-        value: documents
-      - key: EMBEDDING_MODEL_PRELOAD
-        value: "true"
-      - key: EMBEDDING_BATCH_SIZE
-        value: "8"
-      - key: TOKENIZERS_PARALLELISM
-        value: "false"
-      - key: OMP_NUM_THREADS
-        value: "2"
-      - key: MKL_NUM_THREADS
-        value: "2"
-      - key: DATABASE_URL
-        sync: false
-      - key: SUPABASE_URL
-        sync: false
-      - key: SUPABASE_SERVICE_ROLE_KEY
-        sync: false
-      - key: LLM_PROVIDER
-        sync: false
-      - key: LLM_PROVIDER_API_KEY
         sync: false
