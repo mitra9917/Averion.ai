@@ -1,24 +1,26 @@
 # Render Blueprint: Averion API + document ingestion worker
-# https://render.com/docs/blueprint-spec
-#
-# Import in Render Dashboard -> New -> Blueprint -> connect this repo.
-# Set secret env vars in the dashboard after the blueprint is applied.
+# Dashboard: New -> Blueprint -> connect GitHub repo
 
 services:
   - type: web
     name: averion-api
-    runtime: docker
-    dockerfilePath: ./apps/api/Dockerfile
-    dockerContext: ./apps/api
-    plan: starter
+    runtime: python
+    rootDir: apps/api
+    plan: free
     healthCheckPath: /health
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.8"
       - key: AVERION_PROCESS
         value: api
       - key: INLINE_DOCUMENT_INGESTION
         value: "false"
       - key: DOCUMENT_STORAGE_BACKEND
         value: supabase
+      - key: SUPABASE_STORAGE_BUCKET
+        value: documents
       - key: AUTH_REQUIRED
         value: "true"
       - key: EMBEDDING_MODEL_PRELOAD
@@ -45,18 +47,25 @@ services:
         sync: false
       - key: LLM_PROVIDER_API_KEY
         sync: false
+      - key: LLM_MODEL_NAME
+        sync: false
 
   - type: worker
     name: averion-document-worker
-    runtime: docker
-    dockerfilePath: ./apps/api/Dockerfile
-    dockerContext: ./apps/api
+    runtime: python
+    rootDir: apps/api
     plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m app.workers.document_ingestion
     envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.8"
       - key: AVERION_PROCESS
         value: worker
       - key: DOCUMENT_STORAGE_BACKEND
         value: supabase
+      - key: SUPABASE_STORAGE_BUCKET
+        value: documents
       - key: EMBEDDING_MODEL_PRELOAD
         value: "true"
       - key: EMBEDDING_BATCH_SIZE
