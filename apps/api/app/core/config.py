@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     document_job_max_attempts: int = 3
     document_job_retry_delay_seconds: int = 30
     document_job_lease_seconds: int = 900
+    # Upload-time inline worker locks expire faster so the daemon can recover after restarts.
+    document_job_inline_lease_seconds: int = 120
     document_worker_poll_seconds: float = 2.0
     document_max_chunks: int = 2_000
     # Conservative default for memory-constrained deployment instances.

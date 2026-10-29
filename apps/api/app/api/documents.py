@@ -128,7 +128,11 @@ async def upload_document(
             organization_id=context.organization_id,
             uploaded_by_user_id=context.user_id
         )
-        if response.metadata_stored and settings.inline_document_ingestion:
+        if (
+            response.metadata_stored
+            and settings.inline_document_ingestion
+            and not settings.enable_document_ingestion_daemon
+        ):
             background_tasks.add_task(
                 run_document_ingestion_in_thread,
                 response.document_id,

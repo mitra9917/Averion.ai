@@ -132,8 +132,15 @@ def claim_next_ingestion_job(worker_id: str) -> DocumentIngestionJob | None:
                       )
                       or (
                         jobs.status = 'processing'
-                        and jobs.locked_at <
-                          now() - make_interval(secs => %s)
+                        and (
+                          jobs.locked_at <
+                            now() - make_interval(secs => %s)
+                          or (
+                            jobs.locked_by = 'api-upload-inline'
+                            and jobs.locked_at <
+                              now() - make_interval(secs => %s)
+                          )
+                        )
                       )
                     )
                   order by jobs.available_at, jobs.created_at
@@ -160,7 +167,12 @@ def claim_next_ingestion_job(worker_id: str) -> DocumentIngestionJob | None:
                   jobs.attempts,
                   jobs.max_attempts
                 """,
-                (settings.document_job_lease_seconds, worker_id)
+                (
+                    settings.document_job_lease_seconds,
+                    settings.document_job_lease_seconds,
+                    settings.document_job_inline_lease_seconds,
+                    worker_id,
+                )
             )
             row = cursor.fetchone()
 
