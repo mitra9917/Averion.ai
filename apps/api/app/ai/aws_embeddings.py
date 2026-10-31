@@ -6,6 +6,12 @@ import time
 from functools import lru_cache
 
 from app.core.config import settings
+from app.ai.provider_utils import AIProviderError
+
+
+class EmbeddingServiceError(AIProviderError):
+    def __init__(self, message: str) -> None:
+        super().__init__(message, provider="aws_lambda")
 
 
 @lru_cache(maxsize=1)
@@ -23,8 +29,19 @@ def lambda_client():
 
 
 def invoke_embedding_service(payload: dict) -> dict:
+    try:
+        return _invoke_embedding_service(payload)
+    except EmbeddingServiceError:
+        raise
+    except Exception as exc:
+        raise EmbeddingServiceError(
+            "Document search is temporarily unavailable. Please try again."
+        ) from exc
+
+
+def _invoke_embedding_service(payload: dict) -> dict:
     if not settings.embedding_aws_function_name:
-        raise RuntimeError("AWS embedding function is not configured")
+        raise EmbeddingServiceError("Document search is not configured.")
     response = lambda_client().invoke(
         FunctionName=settings.embedding_aws_function_name,
         InvocationType="RequestResponse",
@@ -36,9 +53,9 @@ def invoke_embedding_service(payload: dict) -> dict:
     finally:
         stream.close()
     if response.get("FunctionError"):
-        raise RuntimeError("AWS embedding service failed")
+        raise EmbeddingServiceError("AWS embedding service failed. Please try again.")
     if body.get("model") != settings.embedding_model_name or not body.get("loaded"):
-        raise RuntimeError("AWS embedding model is unavailable or mismatched")
+        raise EmbeddingServiceError("AWS embedding model is unavailable or mismatched.")
     return body
 
 
@@ -50,13 +67,13 @@ def encode_remote(texts: list[str]) -> list[list[float]]:
     body = invoke_embedding_service({"action": "embed", "texts": texts})
     vectors = body.get("vectors")
     if not isinstance(vectors, list) or len(vectors) != len(texts):
-        raise RuntimeError("AWS embedding service returned an invalid batch")
+        raise EmbeddingServiceError("AWS embedding service returned an invalid batch.")
     for vector in vectors:
         if (
             not isinstance(vector, list) or len(vector) != 384
             or any(not isinstance(v, (float, int)) or not math.isfinite(v) for v in vector)
         ):
-            raise RuntimeError("AWS embedding service returned an invalid vector")
+            raise EmbeddingServiceError("AWS embedding service returned an invalid vector.")
     return vectors
 
 

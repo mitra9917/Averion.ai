@@ -149,7 +149,7 @@
           "x86_64"
         ],
         "MemorySize": 3008,
-        "Timeout": 70,
+        "Timeout": 180,
         "Role": {
           "Fn::GetAtt": [
             "EmbeddingRole",
@@ -203,7 +203,8 @@
             },
             "EMBEDDING_PROVIDER": "local",
             "EMBEDDING_BATCH_SIZE": "4",
-            "DOCUMENT_JOB_LEASE_SECONDS": "960"
+            "DOCUMENT_JOB_LEASE_SECONDS": "960",
+            "DOCUMENT_WORKER_MAX_CONCURRENCY": "4"
           }
         },
         "LoggingConfig": {

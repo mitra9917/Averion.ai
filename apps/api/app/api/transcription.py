@@ -4,11 +4,15 @@ Transcription API Endpoint
 Provides speech-to-text transcription using Groq Whisper API.
 """
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+import asyncio
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel
 
 from app.ai.provider_utils import AIProviderError
 from app.ai.transcription_service import transcribe_audio
+from app.core.auth import RequestContext, get_request_context
+from app.core.rate_limit import limit_transcription
 
 router = APIRouter(prefix="/transcribe", tags=["transcription"])
 
@@ -21,7 +25,8 @@ class TranscriptionResponse(BaseModel):
 @router.post("", response_model=TranscriptionResponse)
 async def transcribe_audio_file(
     file: UploadFile = File(...),
-    language: str = "en"
+    language: str = "en",
+    context: RequestContext = Depends(get_request_context),
 ) -> TranscriptionResponse:
     """
     Transcribe audio file to text using Groq Whisper with language support.
@@ -40,6 +45,7 @@ async def transcribe_audio_file(
         400: Invalid audio file or format
         503: Transcription service unavailable
     """
+    limit_transcription(context.user_id or context.organization_id)
     # Validate file
     if not file.filename:
         raise HTTPException(
@@ -59,7 +65,10 @@ async def transcribe_audio_file(
     
     try:
         # Read audio data
-        audio_data = await file.read()
+        max_size = 25 * 1024 * 1024
+        audio_data = await file.read(max_size + 1)
+        if len(audio_data) > max_size:
+            raise HTTPException(413, "Audio file exceeds the 25 MiB limit.")
         
         if not audio_data:
             raise HTTPException(
@@ -68,7 +77,7 @@ async def transcribe_audio_file(
             )
         
         # Transcribe using Groq Whisper with language support
-        transcript = transcribe_audio(audio_data, file.filename, language)
+        transcript = await asyncio.to_thread(transcribe_audio, audio_data, file.filename, language)
         
         return TranscriptionResponse(transcript=transcript)
         

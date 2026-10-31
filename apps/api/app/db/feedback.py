@@ -99,7 +99,7 @@ def store_feedback(feedback: FeedbackCreate) -> FeedbackRecord:
     )
 
 
-def list_feedback(limit: int = 50) -> list[FeedbackRecord]:
+def list_feedback(*, organization_id: str, limit: int = 50) -> list[FeedbackRecord]:
     if not is_database_configured():
         raise DatabaseNotConfiguredError("DATABASE_URL is not configured.")
 
@@ -108,17 +108,20 @@ def list_feedback(limit: int = 50) -> list[FeedbackRecord]:
             cursor.execute(
                 """
                 select
-                    id::text,
-                    message_id::text,
-                    user_id::text,
-                    rating,
-                    correction_text,
-                    created_at::text
+                    feedback.id::text,
+                    feedback.message_id::text,
+                    feedback.user_id::text,
+                    feedback.rating,
+                    feedback.correction_text,
+                    feedback.created_at::text
                 from feedback
-                order by created_at desc
+                join messages on messages.id = feedback.message_id
+                join conversations on conversations.id = messages.conversation_id
+                where conversations.organization_id = %s::uuid
+                order by feedback.created_at desc
                 limit %s
                 """,
-                (limit,)
+                (organization_id, limit)
             )
 
             return [

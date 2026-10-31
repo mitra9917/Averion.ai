@@ -98,6 +98,11 @@ def test_chat_endpoint_returns_answer_and_stores_messages(monkeypatch) -> None:
 
 
 def test_chat_endpoint_handles_no_retrieval_results(monkeypatch) -> None:
+    monkeypatch.setattr("app.api.chat.store_chat_exchange", lambda **kwargs: StoredChatMessages(
+        conversation_id="00000000-0000-0000-0000-000000000123",
+        user_message_id="00000000-0000-0000-0000-000000000124",
+        assistant_message_id="00000000-0000-0000-0000-000000000125",
+    ))
     monkeypatch.setattr("app.api.chat.retrieve_chunks", lambda query, top_k, organization_id, min_score=None: [])
 
     response = client.post(

@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core.auth import RequestContext, get_request_context
@@ -22,7 +24,7 @@ router = APIRouter(prefix="/conversations", tags=["conversations"])
 
 
 @router.get("", response_model=ConversationListResponse)
-async def list_conversations(
+def list_conversations(
     context: RequestContext = Depends(get_request_context)
 ) -> ConversationListResponse:
     """
@@ -73,8 +75,8 @@ async def list_conversations(
 
 
 @router.get("/{conversation_id}", response_model=ConversationDetailResponse)
-async def get_conversation(
-    conversation_id: str,
+def get_conversation(
+    conversation_id: UUID,
     context: RequestContext = Depends(get_request_context)
 ) -> ConversationDetailResponse:
     """
@@ -96,7 +98,7 @@ async def get_conversation(
     """
     try:
         conversation = get_conversation_by_id(
-            conversation_id=conversation_id,
+            conversation_id=str(conversation_id),
             organization_id=context.organization_id
         )
         
@@ -135,8 +137,8 @@ async def get_conversation(
 
 
 @router.delete("/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def remove_conversation(
-    conversation_id: str,
+def remove_conversation(
+    conversation_id: UUID,
     context: RequestContext = Depends(get_request_context)
 ) -> None:
     """
@@ -155,7 +157,7 @@ async def remove_conversation(
     """
     try:
         delete_conversation(
-            conversation_id=conversation_id,
+            conversation_id=str(conversation_id),
             organization_id=context.organization_id
         )
         
@@ -172,8 +174,8 @@ async def remove_conversation(
 
 
 @router.patch("/{conversation_id}/title", status_code=status.HTTP_204_NO_CONTENT)
-async def update_title(
-    conversation_id: str,
+def update_title(
+    conversation_id: UUID,
     request: UpdateTitleRequest,
     context: RequestContext = Depends(get_request_context)
 ) -> None:
@@ -200,7 +202,7 @@ async def update_title(
             )
         
         update_conversation_title(
-            conversation_id=conversation_id,
+            conversation_id=str(conversation_id),
             organization_id=context.organization_id,
             title=request.title.strip()
         )

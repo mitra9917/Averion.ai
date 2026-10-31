@@ -42,7 +42,7 @@ def mock_auth(monkeypatch):
     # Mock store_chat_exchange to avoid database calls
     def mock_store_chat_exchange(**kwargs):
         return StoredChatMessages(
-            conversation_id="test-conv-123",
+            conversation_id="00000000-0000-0000-0000-000000000123",
             user_message_id="test-msg-user-123",
             assistant_message_id="test-msg-assistant-123"
         )

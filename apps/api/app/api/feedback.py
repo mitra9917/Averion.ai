@@ -55,10 +55,11 @@ def create_feedback(
 
 @router.get("", response_model=list[FeedbackResponse])
 def get_feedback(
-    limit: int = Query(default=50, ge=1, le=200)
+    limit: int = Query(default=50, ge=1, le=200),
+    context: RequestContext = Depends(get_request_context),
 ) -> list[FeedbackResponse]:
     try:
-        records = list_feedback(limit=limit)
+        records = list_feedback(organization_id=context.organization_id, limit=limit)
     except DatabaseNotConfiguredError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

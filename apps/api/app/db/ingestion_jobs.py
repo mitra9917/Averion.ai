@@ -90,6 +90,20 @@ def claim_next_ingestion_job(worker_id: str) -> DocumentIngestionJob | None:
 
     with open_connection() as connection:
         with connection.cursor() as cursor:
+            if settings.document_worker_max_concurrency > 0:
+                # Transaction-scoped: safe with Supabase transaction pooling.
+                # Serialize only the short claim step, never document processing.
+                cursor.execute("select pg_try_advisory_xact_lock(%s)", (0x41564552494F4E,))
+                if not cursor.fetchone()[0]:
+                    return None
+                cursor.execute(
+                    """select count(*) from document_ingestion_jobs
+                       where status = 'processing'
+                         and locked_at >= now() - make_interval(secs => %s)""",
+                    (settings.document_job_lease_seconds,),
+                )
+                if cursor.fetchone()[0] >= settings.document_worker_max_concurrency:
+                    return None
             cursor.execute(
                 """
                 with exhausted as (

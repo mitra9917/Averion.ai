@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     # Upload-time inline worker locks expire faster so the daemon can recover after restarts.
     document_job_inline_lease_seconds: int = 120
     document_worker_poll_seconds: float = 2.0
+    document_worker_max_concurrency: int = 0
     document_max_chunks: int = 2_000
     # Conservative default for memory-constrained deployment instances.
     embedding_batch_size: int = 8
@@ -37,7 +38,7 @@ class Settings(BaseSettings):
     embedding_provider: str = "local"
     embedding_aws_region: str = "ap-south-1"
     embedding_aws_function_name: str = ""
-    embedding_aws_timeout_seconds: int = 75
+    embedding_aws_timeout_seconds: int = 185
     document_worker_aws_function_name: str = ""
     retrieval_top_k: int = 5
     # Cosine distance threshold: 0.0 (identical) to 2.0 (opposite).

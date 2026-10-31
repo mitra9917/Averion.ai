@@ -187,7 +187,8 @@ def test_create_feedback_returns_503_when_database_is_not_configured(monkeypatch
 
 
 def test_list_feedback_returns_queryable_records(monkeypatch) -> None:
-    def fake_list_feedback(limit: int) -> list[FeedbackRecord]:
+    def fake_list_feedback(*, organization_id: str, limit: int) -> list[FeedbackRecord]:
+        assert organization_id == settings.default_organization_id
         assert limit == 2
 
         return [

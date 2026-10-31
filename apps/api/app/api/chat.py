@@ -1,6 +1,6 @@
 import time
-import uuid
 import logging
+from threading import BoundedSemaphore
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
@@ -27,6 +27,7 @@ from app.schemas.chat import ChatCitation, ChatRequest, ChatResponse
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 logger = logging.getLogger(__name__)
+_chat_capacity = BoundedSemaphore(4)
 
 
 def _build_provider_fallback_answer() -> str:
@@ -37,10 +38,21 @@ def _build_provider_fallback_answer() -> str:
 
 
 @router.post("", response_model=ChatResponse)
-async def chat(
+def chat(
     request: ChatRequest,
     context: RequestContext = Depends(get_request_context)
 ) -> ChatResponse:
+    # Leave thread-pool capacity available for health/auth/other API routes.
+    if not _chat_capacity.acquire(blocking=False):
+        raise HTTPException(503, "Chat is busy. Please try again shortly.",
+                            headers={"Retry-After": "5"})
+    try:
+        return _process_chat(request, context)
+    finally:
+        _chat_capacity.release()
+
+
+def _process_chat(request: ChatRequest, context: RequestContext) -> ChatResponse:
     """
     Process a chat question and return an AI-generated answer with citations.
     
@@ -164,9 +176,17 @@ async def chat(
                 user_id=context.user_id
             )
             
+            stored_messages = store_chat_exchange(
+                organization_id=context.organization_id,
+                user_id=context.user_id,
+                conversation_id=request.conversation_id,
+                question=request.question.strip(),
+                answer=safe_answer,
+                citations=[],
+            )
             return ChatResponse(
-                conversation_id=request.conversation_id or "new",
-                message_id=str(uuid.uuid4()),
+                conversation_id=stored_messages.conversation_id,
+                message_id=stored_messages.assistant_message_id,
                 answer=safe_answer,
                 citations=[],
                 sources=[]
@@ -244,9 +264,17 @@ async def chat(
                 organization_id=context.organization_id,
                 user_id=context.user_id
             )
+            stored_messages = store_chat_exchange(
+                organization_id=context.organization_id,
+                user_id=context.user_id,
+                conversation_id=request.conversation_id,
+                question=request.question.strip(),
+                answer=safe_answer,
+                citations=[],
+            )
             return ChatResponse(
-                conversation_id=request.conversation_id or "new",
-                message_id=str(uuid.uuid4()),
+                conversation_id=stored_messages.conversation_id,
+                message_id=stored_messages.assistant_message_id,
                 answer=safe_answer,
                 citations=[],
                 sources=[]

@@ -5,7 +5,7 @@ Provides prompt injection detection, output filtering, and security logging.
 """
 
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 
@@ -126,26 +126,24 @@ def log_security_event(
     
     Args:
         event_type: Type of event (e.g., "prompt_injection", "retrieval", "answer_generated")
-        question: User question (truncated for safety)
+        question: Used only to record its length; contents are never logged.
         details: Additional event details
         organization_id: Organization ID
         user_id: User ID
         
     Note:
         - Does NOT log secrets, API keys, or connection strings
-        - Truncates long text to prevent log bloat
+        - Logs metadata only; does not retain user question text
         - Uses structured logging format
     """
-    timestamp = datetime.utcnow().isoformat()
+    timestamp = datetime.now(timezone.utc).isoformat()
     
-    # Truncate question for safety
-    safe_question = question[:200] if question else ""
     
     # Build log entry
     log_entry = {
         "timestamp": timestamp,
         "event_type": event_type,
-        "question": safe_question,
+        "question_length": len(question) if question else 0,
         "organization_id": organization_id,
         "user_id": user_id,
     }
@@ -154,7 +152,8 @@ def log_security_event(
         # Filter out sensitive keys
         safe_details = {
             k: v for k, v in details.items()
-            if k not in ["api_key", "secret", "token", "password", "database_url"]
+            if k in {"intent_type", "pattern", "chunks_retrieved", "top_k", "min_score",
+                     "reason", "citations_count", "answer_length"}
         }
         log_entry["details"] = safe_details
     

@@ -23,11 +23,11 @@ def extract_text_from_txt(file_path: str) -> str:
 
 def extract_text_from_pdf(file_path: str) -> str:
     try:
-        import PyPDF2
+        import pypdf
         
         text_parts = []
         with open(file_path, 'rb') as f:
-            pdf_reader = PyPDF2.PdfReader(f)
+            pdf_reader = pypdf.PdfReader(f)
             num_pages = len(pdf_reader.pages)
             
             for page_num in range(num_pages):

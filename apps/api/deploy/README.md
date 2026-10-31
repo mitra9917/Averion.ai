@@ -62,8 +62,11 @@ provisioned concurrency, paid Render worker, always-on AWS VM, NAT gateway, or
 load balancer is required. AWS costs depend on traffic and job duration; a
 US$50 monthly budget is an alert/monitoring target, not a hard billing cap.
 
-The account currently permits ten concurrent Lambda executions. Job claims use
-PostgreSQL locking so concurrent workers do not claim the same document. A
+The account currently permits ten concurrent Lambda executions and 3,008 MiB
+per function. Embedding calls have a 180-second function timeout and 185-second
+client timeout. Chat runs in a bounded thread pool so slow requests do not block
+health checks. PostgreSQL transaction-scoped claims cap active ingestion jobs at
+four; other functions can still serve query embeddings. The queue remains durable. A
 Lambda invocation has a 15-minute limit; validate large documents against this
 limit. Timed-out jobs recover using existing leases and retry limits.
 
@@ -74,7 +77,7 @@ Rotate Render invoke keys by issuing a second key, updating Render, verifying,
 then revoking the old key. After rotating SSM secrets, recycle the ingestion
 function execution environments so its cached configuration reloads.
 
-## Manual Vercel deployment
+## Vercel deployment
 
 Use the existing project or import the repository with root directory `apps/web`,
 Node.js 22, install `npm ci`, and build `npm run build`. Set:
@@ -105,3 +108,21 @@ document and conversation afterward, and never logs the access token.
 
 For local CPU inference, install `requirements-ml.txt`. For the lightweight
 Render runtime, install `requirements.txt` and configure the AWS provider.
+
+## Production safeguards
+
+Feedback reads require authentication and an organization-filtered SQL query.
+No-context chat replies are saved like other exchanges and return real IDs.
+Malformed conversation IDs return a client error; old `new` placeholders recover
+as a new conversation. Security events record question length, never its contents.
+
+Voice input uses independent server-only `TRANSCRIPTION_PROVIDER=groq`,
+`TRANSCRIPTION_PROVIDER_API_KEY` and `TRANSCRIPTION_MODEL_NAME=whisper-large-v3`.
+The endpoint requires authentication, bounds audio reads to 25 MiB and limits
+each account to five requests per minute. The in-memory rate counter resets on
+process restart; it is an abuse safeguard, not a durable billing limit.
+
+Run `python -m pytest` normally; conftest isolates storage, database and provider
+configuration before loading application modules. Production API requirements
+and frontend dependencies have separate audit reports. Development-only lint
+packages may retain advisory matches until compatible upstream releases exist.

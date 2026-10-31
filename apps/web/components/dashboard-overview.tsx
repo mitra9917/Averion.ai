@@ -159,7 +159,7 @@ export function DashboardOverview() {
 
   const defaultBrush = useMemo<[number, number]>(
     () => [0, Math.max(0, series.points.length - 1)],
-    [range, series.points.length]
+    [series.points.length]
   );
   const brush = brushOverride ?? defaultBrush;
 

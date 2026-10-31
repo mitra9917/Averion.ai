@@ -6,6 +6,7 @@ import uuid
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
+from starlette.responses import JSONResponse
 
 from app.core.config import settings
 
@@ -24,6 +25,14 @@ class RequestSecurityMiddleware(BaseHTTPMiddleware):
     """Attach security headers, request IDs, and safe access logs."""
 
     async def dispatch(self, request: Request, call_next) -> Response:
+        if request.url.path.rstrip("/") == "/transcribe":
+            # Reject declared oversized bodies before multipart parsing/spooling.
+            try:
+                content_length = int(request.headers.get("content-length", "0"))
+            except ValueError:
+                return JSONResponse({"detail": "Invalid Content-Length."}, status_code=400)
+            if content_length > 26 * 1024 * 1024:
+                return JSONResponse({"detail": "Audio request exceeds the size limit."}, status_code=413)
         request_id = request.headers.get("x-request-id") or str(uuid.uuid4())
         started_at = time.perf_counter()
         status_code = 500

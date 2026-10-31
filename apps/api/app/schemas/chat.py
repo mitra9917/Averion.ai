@@ -1,12 +1,24 @@
 from datetime import datetime
+from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ChatRequest(BaseModel):
     conversation_id: str | None = None
     question: str = Field(..., min_length=1)
     language: str = "en"
+
+    @field_validator("conversation_id")
+    @classmethod
+    def validate_conversation_id(cls, value: str | None) -> str | None:
+        # Recover browser sessions that received the old unsaved placeholder.
+        if value is None or value == "new":
+            return None
+        try:
+            return str(UUID(value))
+        except ValueError as exc:
+            raise ValueError("conversation_id must be a UUID") from exc
 
 
 class ChatCitation(BaseModel):

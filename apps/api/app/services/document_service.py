@@ -1,3 +1,4 @@
+import asyncio
 from io import BytesIO
 from pathlib import Path
 from uuid import uuid4
@@ -194,11 +195,12 @@ async def save_uploaded_document(
     document_storage = storage or get_document_storage()
     metadata_stored = False
 
-    document_storage.upload(object_key, contents, content_type)
+    await asyncio.to_thread(document_storage.upload, object_key, contents, content_type)
 
     if is_database_configured():
         try:
-            create_document_and_job(
+            await asyncio.to_thread(
+                create_document_and_job,
                 DocumentMetadataCreate(
                     document_id=document_id,
                     organization_id=organization_id,
@@ -212,7 +214,7 @@ async def save_uploaded_document(
             metadata_stored = True
         except Exception as exc:
             try:
-                document_storage.delete(object_key)
+                await asyncio.to_thread(document_storage.delete, object_key)
             except DocumentStorageError:
                 pass
 
