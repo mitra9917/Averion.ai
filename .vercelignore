@@ -1,0 +1,11 @@
+apps/api/
+.env
+.env.*
+**/.env
+**/.env.*
+**/node_modules/
+**/.next/
+**/.venv/
+**/__pycache__/
+**/.pytest_cache/
+**/*.tsbuildinfo

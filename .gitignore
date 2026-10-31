@@ -18,3 +18,4 @@ __pycache__/
 uploads/
 vector_store/
 chroma_db/
+.vercel
