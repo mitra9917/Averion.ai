@@ -1,0 +1,12 @@
+fastapi==0.116.1
+uvicorn[standard]==0.35.0
+pydantic-settings==2.10.1
+python-multipart==0.0.20
+psycopg[binary]==3.2.13
+PyPDF2==3.0.1
+python-docx==1.2.0
+openai==2.38.0
+PyJWT==2.13.0
+cryptography==46.0.3
+certifi==2026.04.22
+boto3==1.43.111

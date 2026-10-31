@@ -9,3 +9,5 @@ chroma_db/
 uploads/
 vector_store/
 tests/
+.cache/
+deploy/

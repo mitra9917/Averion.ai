@@ -25,6 +25,9 @@ def get_embedding_model() -> Any:
     """
     global _model, _model_error
 
+    if settings.embedding_provider != "local":
+        raise RuntimeError("Local model loading is disabled for this deployment")
+
     if _model is None:
         # Keep the local AI stack friendly to laptops with limited memory.
         os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
@@ -50,6 +53,10 @@ def get_embedding_model() -> Any:
 def preload_embedding_model() -> bool:
     """Load the embedding model during startup when configured."""
     global _model_error
+    if settings.embedding_provider == "aws_lambda":
+        from app.ai.aws_embeddings import remote_model_status
+
+        return bool(remote_model_status()["loaded"])
     try:
         get_embedding_model()
         return True
@@ -60,6 +67,10 @@ def preload_embedding_model() -> bool:
 
 
 def get_embedding_model_status() -> dict[str, str | bool | None]:
+    if settings.embedding_provider == "aws_lambda":
+        from app.ai.aws_embeddings import remote_model_status
+
+        return remote_model_status()
     return {
         "model": MODEL_NAME,
         "loaded": _model is not None,
@@ -84,7 +95,12 @@ def embed_text(text: str) -> list[float]:
             _embedding_cache.move_to_end(normalized_text)
             return cached.copy()
 
-    embedding = get_embedding_model().encode(normalized_text).tolist()
+    if settings.embedding_provider == "aws_lambda":
+        from app.ai.aws_embeddings import encode_remote
+
+        embedding = encode_remote([normalized_text])[0]
+    else:
+        embedding = get_embedding_model().encode(normalized_text).tolist()
     _cache_embeddings({normalized_text: embedding})
     return embedding
 
@@ -143,14 +159,19 @@ def generate_embeddings(
                 uncached_text_set.add(text)
 
     if uncached_texts:
-        model = get_embedding_model()
-        generated_embeddings = model.encode(
-            uncached_texts,
-            batch_size=batch_size or settings.embedding_batch_size,
-            show_progress_bar=False
-        )
+        if settings.embedding_provider == "aws_lambda":
+            from app.ai.aws_embeddings import encode_remote
+
+            generated_embeddings = encode_remote(uncached_texts)
+        else:
+            model = get_embedding_model()
+            generated_embeddings = model.encode(
+                uncached_texts,
+                batch_size=batch_size or settings.embedding_batch_size,
+                show_progress_bar=False,
+            )
         generated_by_text = {
-            text: embedding.tolist()
+            text: embedding.tolist() if hasattr(embedding, "tolist") else embedding
             for text, embedding in zip(uncached_texts, generated_embeddings)
         }
         embeddings_by_text.update(generated_by_text)

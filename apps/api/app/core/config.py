@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     request_logging_enabled: bool = True
     vector_db_path: str | None = None
     embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
+    embedding_provider: str = "local"
+    embedding_aws_region: str = "ap-south-1"
+    embedding_aws_function_name: str = ""
+    embedding_aws_timeout_seconds: int = 75
+    document_worker_aws_function_name: str = ""
     retrieval_top_k: int = 5
     # Cosine distance threshold: 0.0 (identical) to 2.0 (opposite).
     # Lower scores = more similar. Threshold = max acceptable distance.

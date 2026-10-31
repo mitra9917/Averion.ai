@@ -1,0 +1,19 @@
+FROM public.ecr.aws/lambda/python:3.12
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    HF_HOME=/opt/averion-models \
+    SENTENCE_TRANSFORMERS_HOME=/opt/averion-models/sentence-transformers \
+    TOKENIZERS_PARALLELISM=false \
+    OMP_NUM_THREADS=2 \
+    MKL_NUM_THREADS=2
+
+RUN dnf install -y libgomp && dnf clean all
+COPY requirements.txt requirements-api.txt requirements-ml.txt ./
+RUN python -m pip install -r requirements-ml.txt
+COPY scripts/cache_embedding_model.py ./scripts/cache_embedding_model.py
+RUN python scripts/cache_embedding_model.py && chmod -R a+rX /opt/averion-models
+ENV HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
+COPY app ./app
+CMD ["app.workers.aws_lambda.handler"]

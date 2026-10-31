@@ -1,5 +1,4 @@
-# Free Render: one web service (API + background upload ingestion on the same instance).
-# Background Workers are paid-only on Render — do not add a worker service for free tier.
+# Public API stays on Render Free. ML inference and ingestion run in private AWS Lambda functions.
 
 services:
   - type: web
@@ -8,15 +7,27 @@ services:
     rootDir: apps/api
     plan: free
     healthCheckPath: /health
-    buildCommand: pip install -r requirements.txt && PYTHONPATH=. python scripts/cache_embedding_model.py
+    buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --timeout-graceful-shutdown 30
     envVars:
       - key: PYTHON_VERSION
         value: "3.12.8"
       - key: INLINE_DOCUMENT_INGESTION
-        value: "true"
+        value: "false"
       - key: ENABLE_DOCUMENT_INGESTION_DAEMON
-        value: "true"
+        value: "false"
+      - key: EMBEDDING_PROVIDER
+        value: aws_lambda
+      - key: EMBEDDING_AWS_REGION
+        value: ap-south-1
+      - key: EMBEDDING_AWS_FUNCTION_NAME
+        sync: false
+      - key: DOCUMENT_WORKER_AWS_FUNCTION_NAME
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
       - key: DATABASE_CONNECT_TIMEOUT
         value: "30"
       - key: DOCUMENT_STORAGE_BACKEND

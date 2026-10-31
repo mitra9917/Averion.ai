@@ -100,7 +100,7 @@ def get_ai_readiness() -> dict[str, object]:
     embeddings = {
         "name": "embeddings",
         "status": "ok" if embeddings_ready else "degraded",
-        "provider": "sentence-transformers",
+        "provider": "aws_lambda" if settings.embedding_provider == "aws_lambda" else "sentence-transformers",
         "model": embedding_status["model"],
         "ready": embeddings_ready,
         "loaded": embedding_status["loaded"],

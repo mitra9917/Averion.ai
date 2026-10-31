@@ -33,6 +33,7 @@ from app.schemas.documents import (
     DocumentUploadResponse
 )
 from app.services.document_ingestion import process_ingestion_job
+from app.services.ingestion_dispatch import dispatch_aws_worker
 from app.services.document_service import (
     DocumentMetadataStorageError,
     DocumentValidationError,
@@ -128,6 +129,8 @@ async def upload_document(
             organization_id=context.organization_id,
             uploaded_by_user_id=context.user_id
         )
+        if response.metadata_stored and settings.document_worker_aws_function_name:
+            await asyncio.to_thread(dispatch_aws_worker)
         if (
             response.metadata_stored
             and settings.inline_document_ingestion
@@ -248,6 +251,8 @@ def retry_document_ingestion(
             status_code=status.HTTP_409_CONFLICT,
             detail="Only failed documents in your organization can be retried."
         )
+
+    dispatch_aws_worker()
 
     return DocumentRetryResponse(
         document_id=document_id,

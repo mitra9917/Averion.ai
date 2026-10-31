@@ -1,0 +1,330 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Averion ML functions; Render remains the public API",
+  "Parameters": {
+    "ImageUri": {
+      "Type": "String"
+    },
+    "ConfigParameter": {
+      "Type": "String",
+      "Default": "/averion/production/ingestion"
+    }
+  },
+  "Resources": {
+    "EmbeddingLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": "/aws/lambda/averion-embeddings-prod",
+        "RetentionInDays": 7
+      }
+    },
+    "WorkerLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": "/aws/lambda/averion-ingestion-prod",
+        "RetentionInDays": 7
+      }
+    },
+    "EmbeddingRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": "averion-embedding-execution",
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "AverionRuntime",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "EmbeddingLogGroup",
+                      "Arn"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "WorkerRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": "averion-ingestion-execution",
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "AverionRuntime",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "WorkerLogGroup",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ssm:GetParameter"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/averion/production/ingestion"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "kms:Decrypt"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:kms:${AWS::Region}:${AWS::AccountId}:key/*"
+                  },
+                  "Condition": {
+                    "StringEquals": {
+                      "kms:ViaService": {
+                        "Fn::Sub": "ssm.${AWS::Region}.amazonaws.com"
+                      },
+                      "kms:EncryptionContext:PARAMETER_ARN": {
+                        "Fn::Sub": "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/averion/production/ingestion"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "Embeddings": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": "averion-embeddings-prod",
+        "PackageType": "Image",
+        "Code": {
+          "ImageUri": {
+            "Ref": "ImageUri"
+          }
+        },
+        "Architectures": [
+          "x86_64"
+        ],
+        "MemorySize": 3008,
+        "Timeout": 70,
+        "Role": {
+          "Fn::GetAtt": [
+            "EmbeddingRole",
+            "Arn"
+          ]
+        },
+        "Environment": {
+          "Variables": {
+            "AVERION_AWS_ROLE": "embeddings",
+            "EMBEDDING_PROVIDER": "local",
+            "EMBEDDING_BATCH_SIZE": "4"
+          }
+        },
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "EmbeddingLogGroup"
+          },
+          "LogFormat": "JSON"
+        }
+      }
+    },
+    "Ingestion": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": "averion-ingestion-prod",
+        "PackageType": "Image",
+        "Code": {
+          "ImageUri": {
+            "Ref": "ImageUri"
+          }
+        },
+        "Architectures": [
+          "x86_64"
+        ],
+        "MemorySize": 3008,
+        "Timeout": 900,
+        "EphemeralStorage": {
+          "Size": 1024
+        },
+        "Role": {
+          "Fn::GetAtt": [
+            "WorkerRole",
+            "Arn"
+          ]
+        },
+        "Environment": {
+          "Variables": {
+            "AVERION_AWS_ROLE": "ingestion",
+            "AVERION_CONFIG_PARAMETER": {
+              "Ref": "ConfigParameter"
+            },
+            "EMBEDDING_PROVIDER": "local",
+            "EMBEDDING_BATCH_SIZE": "4",
+            "DOCUMENT_JOB_LEASE_SECONDS": "960"
+          }
+        },
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "WorkerLogGroup"
+          },
+          "LogFormat": "JSON"
+        }
+      }
+    },
+    "WorkerEventConfig": {
+      "Type": "AWS::Lambda::EventInvokeConfig",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "Ingestion"
+        },
+        "Qualifier": "$LATEST",
+        "MaximumRetryAttempts": 0,
+        "MaximumEventAgeInSeconds": 60
+      }
+    },
+    "PollRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": "averion-ingestion-poll",
+        "ScheduleExpression": "rate(1 minute)",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Id": "Ingestion",
+            "Arn": {
+              "Fn::GetAtt": [
+                "Ingestion",
+                "Arn"
+              ]
+            },
+            "RetryPolicy": {
+              "MaximumRetryAttempts": 0,
+              "MaximumEventAgeInSeconds": 60
+            }
+          }
+        ]
+      }
+    },
+    "PollPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "Ingestion"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "PollRule",
+            "Arn"
+          ]
+        },
+        "SourceAccount": {
+          "Ref": "AWS::AccountId"
+        }
+      }
+    },
+    "RenderCaller": {
+      "Type": "AWS::IAM::User",
+      "Properties": {
+        "UserName": "averion-render-invoke",
+        "Policies": [
+          {
+            "PolicyName": "InvokeAverionMLOnly",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "lambda:InvokeFunction"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "Embeddings",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::GetAtt": [
+                        "Ingestion",
+                        "Arn"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "EmbeddingFunction": {
+      "Value": {
+        "Fn::GetAtt": [
+          "Embeddings",
+          "Arn"
+        ]
+      }
+    },
+    "IngestionFunction": {
+      "Value": {
+        "Fn::GetAtt": [
+          "Ingestion",
+          "Arn"
+        ]
+      }
+    },
+    "RenderCaller": {
+      "Value": {
+        "Ref": "RenderCaller"
+      }
+    }
+  }
+}
