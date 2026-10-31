@@ -26,6 +26,10 @@ class ProviderRequestError(AIProviderError):
     """Raised when a configured provider request fails."""
 
 
+class ProviderResponseError(ProviderRequestError):
+    """A successful request returned an empty or incomplete answer; retry boundedly."""
+
+
 SECRET_PATTERNS = (
     re.compile(r"(sk-[A-Za-z0-9_\-]{8,})"),
     re.compile(r"(gsk_[A-Za-z0-9_\-]{8,})"),
@@ -50,6 +54,8 @@ def provider_failure_message(kind: str = "AI provider") -> str:
 
 def is_transient_provider_error(error: Exception) -> bool:
     """Return whether a failed request is safe to retry once."""
+    if isinstance(error, ProviderResponseError):
+        return True
     status_code = getattr(error, "status_code", None)
     response = getattr(error, "response", None)
     if status_code is None and response is not None:

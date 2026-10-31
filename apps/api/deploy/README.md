@@ -41,6 +41,10 @@ Set server-only variables:
   credentials in browser variables, logs, or source control.
 - Existing database, Supabase, JWT, LLM, storage, and allowed-domain settings.
   Groq's configured model must exist; the project's default is `openai/gpt-oss-20b`.
+  GPT-OSS uses `LLM_REASONING_MAX_TOKENS` (default 2400) for its combined reasoning
+  and final-answer budget. Keep this separate from the 600-token allowance for
+  non-reasoning models. A truncated GPT-OSS completion retries once with up to
+  twice that budget; hidden reasoning and document prompts are never logged.
 - `CORS_ORIGINS`: exact frontend origins, comma-separated.
 
 Render Free still sleeps when idle, can restart, has shared usage limits, and

@@ -1,9 +1,11 @@
 """Provider-agnostic interface for generating chat answers."""
 
+import logging
+
 from app.core.config import settings
 from app.ai.provider_utils import (
     ProviderConfigurationError,
-    ProviderRequestError,
+    ProviderResponseError,
     provider_failure_message,
     run_with_retries,
 )
@@ -11,6 +13,8 @@ from app.ai.provider_utils import (
 GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 GROQ_DEFAULT_CHAT_MODEL = "openai/gpt-oss-20b"
 OPENAI_DEFAULT_CHAT_MODEL = "gpt-4o-mini"
+GROQ_REASONING_MODELS = {"openai/gpt-oss-20b", "openai/gpt-oss-120b"}
+logger = logging.getLogger(__name__)
 
 
 def _get_openai_client_class():
@@ -85,17 +89,44 @@ def _call_openai_compatible_chat(prompt: str, provider: str) -> str:
     client = OpenAI(**client_kwargs)
 
     model_name = get_chat_model_name(provider)
+    reasoning_model = provider == "groq" and model_name in GROQ_REASONING_MODELS
+    completion_budget = (max(settings.llm_max_tokens, settings.llm_reasoning_max_tokens)
+                         if reasoning_model else settings.llm_max_tokens)
+    maximum_completion_budget = max(completion_budget, settings.llm_reasoning_max_tokens * 2)
 
     def operation() -> str:
-        response = client.chat.completions.create(
-            model=model_name,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=settings.llm_temperature,
-            max_tokens=settings.llm_max_tokens
-        )
-        answer = response.choices[0].message.content
-        if not answer:
-            raise ProviderRequestError(
+        nonlocal completion_budget
+        request = {
+            "model": model_name,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": settings.llm_temperature,
+        }
+        if reasoning_model:
+            request.update(
+                max_completion_tokens=completion_budget,
+                reasoning_effort="medium",
+                extra_body={"include_reasoning": False},
+            )
+        else:
+            request["max_tokens"] = settings.llm_max_tokens
+        response = client.chat.completions.create(**request)
+        choice = response.choices[0] if response.choices else None
+        answer = choice.message.content if choice else None
+        finish_reason = getattr(choice, "finish_reason", None)
+        if not answer or not answer.strip() or (reasoning_model and finish_reason == "length"):
+            # Record only provider metadata, never the prompt, sources or reasoning.
+            usage = getattr(response, "usage", None)
+            details = getattr(usage, "completion_tokens_details", None)
+            logger.warning(
+                "Incomplete chat completion: provider=%s model=%s finish_reason=%s "
+                "completion_tokens=%s reasoning_tokens=%s budget=%s",
+                provider, model_name, finish_reason,
+                getattr(usage, "completion_tokens", None),
+                getattr(details, "reasoning_tokens", None), completion_budget,
+            )
+            if reasoning_model and finish_reason == "length":
+                completion_budget = min(completion_budget * 2, maximum_completion_budget)
+            raise ProviderResponseError(
                 provider_failure_message("AI provider"),
                 provider=provider
             )

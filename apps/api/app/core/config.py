@@ -55,6 +55,8 @@ class Settings(BaseSettings):
     llm_model_name: str = "openai/gpt-oss-20b"
     llm_temperature: float = 0.2
     llm_max_tokens: int = 600
+    # GPT-OSS shares its completion budget between reasoning and the final answer.
+    llm_reasoning_max_tokens: int = 2400
     rag_prompt_max_context_chars: int = 4_500
     rag_prompt_max_chunk_chars: int = 850
     transcription_provider: str = "disabled"
