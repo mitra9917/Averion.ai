@@ -20,11 +20,15 @@ LANGUAGE_NAMES = {
 def _compact_chunk_text(text: str, max_chars: int) -> str:
     """Keep each source small enough for low-TPM providers."""
     normalized = " ".join((text or "").split())
+    if max_chars <= 0:
+        return ""
     if len(normalized) <= max_chars:
         return normalized
 
-    head_chars = max(1, int(max_chars * 0.72))
-    tail_chars = max(1, max_chars - head_chars - 20)
+    if max_chars <= 7:
+        return normalized[:max_chars]
+    head_chars = max(1, int((max_chars - 5) * 0.72))
+    tail_chars = max_chars - head_chars - 5
     return f"{normalized[:head_chars].rstrip()} ... {normalized[-tail_chars:].lstrip()}"
 
 
@@ -86,12 +90,18 @@ def build_rag_prompt(question: str, chunks: list[dict], language: str = "en") ->
     else:
         # Add all chunks with numbered citations for user-friendly references
         context_chars_used = 0
+        # Preserve every retrieved source while allowing fuller passages when
+        # fewer sources are returned. Total context size stays bounded.
+        per_source_limit = min(
+            settings.rag_prompt_max_chunk_chars,
+            max(1, settings.rag_prompt_max_context_chars // len(chunks)),
+        )
         for idx, chunk in enumerate(chunks, start=1):
             remaining_context = settings.rag_prompt_max_context_chars - context_chars_used
             if remaining_context <= 0:
                 break
 
-            chunk_limit = min(settings.rag_prompt_max_chunk_chars, remaining_context)
+            chunk_limit = min(per_source_limit, remaining_context)
             text = _compact_chunk_text(chunk.get("text", ""), chunk_limit)
             context_chars_used += len(text)
 

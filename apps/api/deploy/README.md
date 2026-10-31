@@ -45,6 +45,8 @@ Set server-only variables:
   and final-answer budget. Keep this separate from the 600-token allowance for
   non-reasoning models. A truncated GPT-OSS completion retries once with up to
   twice that budget; hidden reasoning and document prompts are never logged.
+  RAG context remains capped at 4500 characters and is shared fairly between
+  retrieved sources, with up to 2000 characters per passage when space permits.
 - `CORS_ORIGINS`: exact frontend origins, comma-separated.
 
 Render Free still sleeps when idle, can restart, has shared usage limits, and

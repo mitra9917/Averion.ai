@@ -74,7 +74,7 @@ def test_prompt_context_is_capped_for_provider_token_limits(monkeypatch):
     assert len(prompt) < 4_000
     assert "[Source 1]" in prompt
     assert "[Source 3]" in prompt
-    assert "[Source 8]" not in prompt
+    assert "[Source 8]" in prompt
     assert "..." in prompt
 
 

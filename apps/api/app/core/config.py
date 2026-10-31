@@ -58,7 +58,7 @@ class Settings(BaseSettings):
     # GPT-OSS shares its completion budget between reasoning and the final answer.
     llm_reasoning_max_tokens: int = 2400
     rag_prompt_max_context_chars: int = 4_500
-    rag_prompt_max_chunk_chars: int = 850
+    rag_prompt_max_chunk_chars: int = 2000
     transcription_provider: str = "disabled"
     transcription_provider_api_key: str = ""
     transcription_provider_base_url: str | None = None
