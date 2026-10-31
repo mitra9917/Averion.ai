@@ -213,13 +213,9 @@ def test_chat_endpoint_uses_authenticated_organization_scope(monkeypatch) -> Non
     assert "don't have enough information" in response.json()["answer"].lower()
 
 
-def test_chat_endpoint_returns_safe_fallback_for_llm_provider_error(monkeypatch) -> None:
+def test_chat_endpoint_returns_retryable_error_without_saving_failed_answer(monkeypatch) -> None:
     def fake_store_chat_exchange(**kwargs) -> StoredChatMessages:
-        return StoredChatMessages(
-            conversation_id="conv_error",
-            user_message_id="msg_user_error",
-            assistant_message_id="msg_assistant_error"
-        )
+        raise AssertionError("Failed generations must not be saved as answers")
 
     def fake_retrieve_chunks(query: str, top_k: int, organization_id: str, min_score: float | None = None) -> list[dict]:
         return [
@@ -250,11 +246,9 @@ def test_chat_endpoint_returns_safe_fallback_for_llm_provider_error(monkeypatch)
         }
     )
 
-    assert response.status_code == 200
-    body = response.json()
-    assert body["answer"] == "Sorry, I'm temporarily unavailable. Please try again in a moment."
-    assert body["citations"] == []
-    assert body["sources"] == []
+    assert response.status_code == 503
+    assert response.headers["retry-after"] == "5"
+    assert response.json() == {"detail": "AI provider is temporarily unavailable. Please try again."}
     assert "sk-" not in response.text
 
 

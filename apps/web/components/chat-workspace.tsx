@@ -89,6 +89,7 @@ export function ChatWorkspace() {
   const [languageReady, setLanguageReady] = useState(false);
   const [userLanguage, setUserLanguage] = useState("en");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [failedQuestion, setFailedQuestion] = useState<string | null>(null);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [quoteCopied, setQuoteCopied] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(true);
@@ -212,6 +213,7 @@ export function ChatWorkspace() {
   async function openConversation(id: string) {
     setIsLoadingConversation(true);
     setErrorMessage(null);
+    setFailedQuestion(null);
 
     try {
       const response = await getConversation(id);
@@ -254,13 +256,15 @@ export function ChatWorkspace() {
   async function submitQuestion(trimmedQuestion: string) {
     if (!trimmedQuestion || isSending) return;
 
+    const optimisticId = `local-${crypto.randomUUID()}`;
     setMessages((current) => [
       ...current,
-      { id: `local-${Date.now()}`, role: "user", content: trimmedQuestion }
+      { id: optimisticId, role: "user", content: trimmedQuestion }
     ]);
     setQuestion("");
     setIsSending(true);
     setErrorMessage(null);
+    setFailedQuestion(null);
 
     try {
       const response = await sendChatMessage({
@@ -292,6 +296,9 @@ export function ChatWorkspace() {
 
       await refreshConversations();
     } catch (error) {
+      setMessages((current) => current.filter((message) => message.id !== optimisticId));
+      setQuestion((current) => current || trimmedQuestion);
+      setFailedQuestion(trimmedQuestion);
       setErrorMessage(error instanceof Error ? error.message : "Chat request failed.");
     } finally {
       setIsSending(false);
@@ -326,6 +333,7 @@ export function ChatWorkspace() {
     setQuestion(filenamePrompt);
     setSelection(null);
     setErrorMessage(null);
+    setFailedQuestion(null);
     router.replace("/chat");
   }
 
@@ -622,13 +630,29 @@ export function ChatWorkspace() {
                 </div>
               ) : (
                 <div className="space-y-8">
-                  {messages.map((message) =>
+                  {messages.map((message, messageIndex) =>
                     message.role === "user" ? (
                       <div className="flex justify-end" key={message.id}>
                         <p className="max-w-[46ch] rounded-[18px] bg-soft px-4 py-2.5 text-[15px] leading-6">
                           {message.content}
                         </p>
                       </div>
+                    ) : message.content.trim() === "Sorry, I'm temporarily unavailable. Please try again in a moment." && !message.citations?.length ? (
+                      <article className="rounded-control border border-hairline bg-soft p-4" key={message.id}>
+                        <p className="micro">Earlier request failed</p>
+                        <p className="mt-2 text-sm text-muted">This saved reply did not contain an answer. Retry the question to generate a fresh response.</p>
+                        <button
+                          className="mt-3 rounded-full border border-hairline bg-surface px-3 py-1.5 text-xs font-semibold hover:bg-canvas disabled:opacity-40"
+                          disabled={isSending || isLoadingConversation}
+                          onClick={() => {
+                            const previous = messages.slice(0, messageIndex).reverse().find((entry) => entry.role === "user");
+                            if (previous) void submitQuestion(previous.content);
+                          }}
+                          type="button"
+                        >
+                          Retry question
+                        </button>
+                      </article>
                     ) : (
                       <article className="group relative" key={message.id}>
                         <div className="mb-3 flex items-center justify-between">
@@ -695,9 +719,14 @@ export function ChatWorkspace() {
           </div>
 
           {errorMessage ? (
-            <div className="mx-5 mb-3 flex items-start gap-3 rounded-control border border-hairline bg-soft px-3 py-2 text-sm">
+            <div role="alert" className="mx-5 mb-3 flex items-start gap-3 rounded-control border border-hairline bg-soft px-3 py-2 text-sm">
               <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-fail" />
               <span className="flex-1">{errorMessage}</span>
+              {failedQuestion ? (
+                <button className="shrink-0 font-semibold underline disabled:opacity-40" disabled={isSending} onClick={() => void submitQuestion(failedQuestion)} type="button">
+                  Retry
+                </button>
+              ) : null}
               <button aria-label="Dismiss message" onClick={() => setErrorMessage(null)} type="button">
                 <X size={14} />
               </button>

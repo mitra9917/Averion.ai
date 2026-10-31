@@ -30,13 +30,6 @@ logger = logging.getLogger(__name__)
 _chat_capacity = BoundedSemaphore(4)
 
 
-def _build_provider_fallback_answer() -> str:
-    """Return a short safe message without exposing retrieved source text."""
-    return "Sorry, I'm temporarily unavailable. Please try again in a moment."
-
-
-
-
 @router.post("", response_model=ChatResponse)
 def chat(
     request: ChatRequest,
@@ -206,36 +199,20 @@ def _process_chat(request: ChatRequest, context: RequestContext) -> ChatResponse
         try:
             llm_started_at = time.perf_counter()
             answer = generate_answer(prompt, chunks)
-        except AIProviderError:
+        except AIProviderError as exc:
             log_security_event(
-                event_type="provider_fallback_answer",
+                event_type="provider_request_failed",
                 question=request.question,
                 details={"chunks_retrieved": len(chunks)},
                 organization_id=context.organization_id,
-                user_id=context.user_id
-            )
-            answer = _build_provider_fallback_answer()
-            stored_messages = store_chat_exchange(
-                organization_id=context.organization_id,
                 user_id=context.user_id,
-                conversation_id=request.conversation_id,
-                question=request.question.strip(),
-                answer=answer,
-                citations=[]
             )
-            logger.warning(
-                "Chat provider unavailable: retrieval_ms=%.1f prompt_ms=%.1f total_ms=%.1f",
-                retrieval_ms,
-                prompt_ms,
-                (time.perf_counter() - started_at) * 1000
-            )
-            return ChatResponse(
-                conversation_id=stored_messages.conversation_id,
-                message_id=stored_messages.assistant_message_id,
-                answer=answer,
-                citations=[],
-                sources=[]
-            )
+            logger.warning("Chat generation failed; no answer was saved")
+            raise HTTPException(
+                status_code=503,
+                detail=exc.public_message,
+                headers={"Retry-After": "5"},
+            ) from exc
         llm_ms = (time.perf_counter() - llm_started_at) * 1000
         
         # PHASE 4: Output Filtering - Check for sensitive data leakage
